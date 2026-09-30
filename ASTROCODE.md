@@ -33,14 +33,33 @@ conventions, build commands, and anything the agent should always know here.
   (`src/skills.ts`, `use_skill` tool, `.astrocode/skills/<name>/SKILL.md`).
   External tools merge into `getToolSchemas()`/`getToolNames()` and dispatch
   inside `executeTool` BEFORE the builtin registry.
+- **Headless engine** (`src/headless.ts`, `astrocode -p`): the SAME agent loop
+  as the TUI (system prompt, compaction, plan gating, loop sensor, verify
+  feedback, budget) extracted into `runAgentTurn`. `-p` streams the answer,
+  `--json` emits one JSON document (nothing else on stdout), `-c` resumes a
+  saved session, `--plan` forces read-only. Exit codes: 0 ok / 1 error /
+  2 verify-failed. `readStdinIfPiped` prepends piped stdin to the prompt.
+- **Shell approval** (`src/approval.ts`): `run_command` consults an
+  `ApprovalGate` from `ToolContext.approvalGate` when present. Modes
+  off/dangerous/all; `y/a/n` TUI prompt (`src/tui/ApprovalPrompt.tsx`); the
+  "always" decision remembers a command PREFIX for the session. Headless
+  mode can't prompt, so non-off modes fail CLOSED there; `ASTROCODE_APPROVE`
+  pre-approves prefixes in both. The canonical `isDangerousCommand` also
+  lives in approval.ts (registry re-exports it).
+- **Real token usage** (`src/ai/openai.ts` `extractUsage` + `cost.ts`
+  `costFromUsage`): chat completions send `stream_options.include_usage`,
+  the Responses path reads `response.completed.usage`; cached tokens are
+  billed at the model's cache rate. Falls back to chars÷4 when a server
+  reports nothing. `Provider.streamComplete` may return `usage`.
 
 ## Harness invariants (do not regress)
 - **Tool results are bounded centrally** in `executeTool` via
   `truncateToolText` (`src/tooloutput.ts`) — never add a tool that returns
   unbounded output and bypasses it.
 - **Every looping context gets a `LoopSensor`** (`src/loopsensor.ts`): the
-  main loop creates one per turn (App.tsx), each sub-agent run gets its own
-  (registry spawnOne). Identical repeat calls are nudged then blocked.
+  main loop creates one per turn (App.tsx), the headless loop creates one
+  per `runAgentTurn` call, each sub-agent run gets its own (registry
+  spawnOne). Identical repeat calls are nudged then blocked.
 - **Tool args are repaired + coerced** in `executeTool`
   (`src/toolargs.ts`) before handlers run — handlers may assume typed args.
 - **Compaction never breaks tool pairing**: use `compactConversation`

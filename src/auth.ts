@@ -26,6 +26,8 @@ export interface AuthConfig {
   autocommit?: boolean;
   maxToolTurns?: number;
   budget?: number;
+  /** Shell approval mode ('off' | 'dangerous' | 'all'). */
+  approvalMode?: 'off' | 'dangerous' | 'all';
   /** Color theme picked via /theme (see tui/theme.ts). */
   theme?: string;
 }
@@ -65,6 +67,7 @@ export function loadAuth(): AuthConfig | null {
       parsed.autocommit === true ||
       typeof parsed.maxToolTurns === 'number' ||
       typeof parsed.budget === 'number' ||
+      typeof parsed.approvalMode === 'string' ||
       typeof parsed.theme === 'string';
     if (!hasAny) return null;
     return {
@@ -78,6 +81,9 @@ export function loadAuth(): AuthConfig | null {
       ...(parsed.autocommit === true ? { autocommit: true } : {}),
       ...(typeof parsed.maxToolTurns === 'number' ? { maxToolTurns: parsed.maxToolTurns } : {}),
       ...(typeof parsed.budget === 'number' ? { budget: parsed.budget } : {}),
+      ...(typeof parsed.approvalMode === 'string' && parsed.approvalMode
+        ? { approvalMode: parsed.approvalMode }
+        : {}),
       ...(typeof parsed.theme === 'string' ? { theme: parsed.theme } : {}),
     };
   } catch {

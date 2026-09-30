@@ -18,6 +18,12 @@ interface Props {
   onSubmit: (v: string) => void;
   history: string[];
   disabled: boolean;
+  /** Agent is mid-turn: Enter QUEUES the prompt, Esc interrupts the turn. */
+  busy?: boolean;
+  /** Called with the typed text when the user submits while busy. */
+  onQueue?: (v: string) => void;
+  /** Called when the user presses Esc while the agent is busy (interrupt). */
+  onAbort?: () => void;
   placeholder: string;
   /** Matching slash commands for the active "/" overlay (empty when not in slash mode). */
   slashMatches: SlashCommandDef[];
@@ -46,7 +52,10 @@ export function PromptInput({
   onChange,
   onSubmit,
   history,
-  disabled,
+  disabled = false,
+  busy = false,
+  onQueue,
+  onAbort,
   placeholder,
   slashMatches,
   slashSel,
@@ -123,8 +132,14 @@ export function PromptInput({
         }
         return;
       }
-      // Esc: clear the line (and close the slash overlay with it).
+      // ---- interrupt / clear ----
+      // Esc: while the agent runs, INTERRUPT the turn (the typed line is
+      // kept so it can be edited and queued); when idle, clear the line.
       if (key.escape) {
+        if (busy) {
+          onAbort?.();
+          return;
+        }
         if (value !== '') {
           onChange('');
           setCursor(0);
@@ -169,21 +184,28 @@ export function PromptInput({
         return;
       }
 
-      // ---- submit / slash selection ----
+      // ---- submit / queue / slash selection ----
       if (key.return) {
         if (slashActive) {
           const v = value.trim().toLowerCase();
           const sel = slashMatches[slashSel];
           // If the typed command already equals the highlighted one, run it.
           if (sel && v === sel.name.toLowerCase()) {
-            onSubmit(value);
+            if (busy) onQueue?.(value.trim());
+            else onSubmit(value);
           } else if (sel) {
             onSlashAccept();
           }
           return;
         }
         const v = value.trim();
-        if (v) onSubmit(v);
+        if (!v) return;
+        if (busy) {
+          // Agent mid-turn: queue the message instead of dropping it.
+          onQueue?.(v);
+          return;
+        }
+        onSubmit(v);
         return;
       }
 
@@ -298,6 +320,10 @@ export function PromptInput({
       {disabled ? (
         <Text color={theme.thinking} dimColor>
           {value || placeholder}
+        </Text>
+      ) : busy && value.length === 0 ? (
+        <Text color={theme.thinking} dimColor>
+          type + Enter to queue · Esc interrupts the agent…
         </Text>
       ) : value.length === 0 ? (
         <Text dimColor>{placeholder}</Text>

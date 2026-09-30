@@ -7,16 +7,24 @@ import { renderAsciiText, ASCII_LINES } from './tui/ascii.js';
 import { setTheme } from './tui/theme.js';
 import { loadConfig, parseArgs, VERSION } from './config.js';
 import { getToolNames } from './tools/registry.js';
+import { runHeadless, readStdinIfPiped } from './headless.js';
+import { ApprovalGate, normalizeApprovalMode, parseApproveEnv } from './approval.js';
+import { loadSession } from './sessions.js';
 
 const HELP = `AstroCode — AI terminal coding agent
 
 USAGE
   astrocode [options]          launch the interactive TUI
+  astrocode -p "task"          one-shot headless run (for scripts & CI)
   astrocode serve [--cwd dir]  run as an MCP server (Open Tool Bus)
 
 OPTIONS
   -d, --demo         Force offline demo mode (no API key needed)
   -m, --model <n>    Set the model (e.g. gpt-4o-mini)
+  -p, --print <t>    Headless: run <t> to completion, print, exit
+      --json         With -p: emit machine-readable JSON instead of text
+  -c, --continue <n> With -p: resume a saved session (see /sessions)
+      --plan         With -p: plan mode (read-only analysis)
       --cwd <path>   Working directory (default: current)
       --serve        Run as an MCP server over stdio (same as 'serve')
   -h, --help         Show this help
@@ -30,6 +38,8 @@ ENVIRONMENT
   ASTROCODE_BUDGET     Max USD spend for a session (0 = unlimited)
   ASTROCODE_VERIFY     Run lint/test after edits (1 = on)
   ASTROCODE_AUTOCOMMIT Auto-commit changes after a turn (1 = on)
+  ASTROCODE_APPROVAL_MODE  Shell approval: off (default) | dangerous | all
+  ASTROCODE_APPROVE    Pre-approved command prefixes, comma-separated ("npm test, git status")
   ASTROCODE_THEME      Color theme (astro, aurora, cyberpunk, dracula, forest,
                        inferno, matrix, nebula, noir, ocean, sunset, synthwave)
   ASTROCODE_SESSION_DIR  Where /save sessions are stored (default ~/.astrocode/sessions)
@@ -40,6 +50,9 @@ EXAMPLES
   ASTROCODE_API_KEY=sk-... astrocode --model gpt-4o
   ASTROCODE_BUDGET=2.0 astrocode
   ASTROCODE_VERIFY=1 ASTROCODE_AUTOCOMMIT=1 astrocode
+  astrocode -p "summarize what changed in git diff --staged" | less
+  echo "extra context" | astrocode -p "review my changes"
+  astrocode -p --json "list every TODO in src/" > report.json
   astrocode serve   # then point any MCP client (e.g. Claude Code) at it
 
 SLASH COMMANDS
@@ -106,6 +119,53 @@ async function main() {
 
   const config = loadConfig(args);
   const cwd = args.cwd || process.cwd();
+
+  // ---- headless one-shot mode (-p / --print) ------------------------------
+  // Runs the same agent loop as the TUI, prints the final answer (streamed
+  // live), and exits with a meaningful code: 0 ok · 1 error · 2 verify fail.
+  // Piped stdin is prepended to the prompt, so `cat err.log | astrocode -p
+  // "explain"` works. Ctrl+C aborts like any CLI process.
+  if (args.print !== undefined) {
+    const piped = await readStdinIfPiped();
+    const prompt = (piped ? piped.trim() + '\n\n' : '') + args.print;
+    if (!prompt.trim()) {
+      process.stderr.write('astrocode: -p/--print requires a task (or piped stdin).\n');
+      process.exitCode = 1;
+      return;
+    }
+    let resume = null;
+    if (args.continueSession) {
+      const s = await loadSession(args.continueSession);
+      if (!s) {
+        process.stderr.write(`astrocode: no saved session named "${args.continueSession}" (see /sessions in the TUI).\n`);
+        process.exitCode = 1;
+        return;
+      }
+      resume = s.messages ?? [];
+    }
+    const gate = new ApprovalGate(
+      // Headless can't prompt: 'dangerous'/'all' auto-denies un-approved
+      // commands (fail closed). Pre-approved prefixes from ASTROCODE_APPROVE
+      // still run.
+      normalizeApprovalMode(
+        process.env.ASTROCODE_APPROVAL_MODE ?? config.approvalMode,
+      ) === 'off'
+        ? 'off'
+        : 'dangerous',
+      parseApproveEnv(process.env.ASTROCODE_APPROVE),
+    );
+    const outcome = await runHeadless({
+      config,
+      cwd,
+      prompt,
+      mode: args.plan ? 'plan' : 'act',
+      resume,
+      json: args.json === true,
+      approvalGate: gate,
+    });
+    process.exitCode = outcome.exitCode;
+    return;
+  }
 
   // ---- MCP server mode (Open Tool Bus) ------------------------------------
   // Exposes AstroCode's tools over JSON-RPC 2.0 stdio so any MCP client

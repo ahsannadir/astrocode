@@ -32,6 +32,8 @@ import {
 } from '../todos.js';
 import { truncateToolText } from '../tooloutput.js';
 import { LoopSensor } from '../loopsensor.js';
+import type { ApprovalGate } from '../approval.js';
+import { isDangerousCommand } from '../approval.js';
 import { repairToolArgsJson, coerceArgsToSchema } from '../toolargs.js';
 import { runSwarm, worktreeCwdFor, recordSwarmResult } from '../swarm.js';
 import {
@@ -70,6 +72,12 @@ export interface ToolContext {
    * repeated identical calls are detected across iterations.
    */
   loopSensor?: LoopSensor;
+  /**
+   * Shell-approval gate (off by default). When present, run_command consults
+   * it before executing; the TUI wires the decision prompt, headless mode
+   * auto-denies.
+   */
+  approvalGate?: ApprovalGate;
 }
 
 type ToolHandler = (
@@ -116,24 +124,12 @@ export const PLAN_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   'spawn_agent', // delegation is safe in plan mode: sub-agents are forced read-only
 ]);
 
-/** @returns true when a command looks intentionally destructive. */
-export function isDangerousCommand(command: string): boolean {
-  const c = command.trim().toLowerCase();
-  const patterns = [
-    /\brm\s+-rf\s+\/\s*$/, // rm -rf /
-    /\brm\s+-rf\s+(\/|\*|\.)\s*$/, // rm -rf / * .
-    /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;/, // fork bomb
-    /\bmkfs\b/, // format
-    /\bdd\s+if=.*of=\/dev\//, // overwrite a device
-    />\s*\/dev\/sd/, // dump to a raw device
-    /--force\s+push/, // force push
-    /\bgit\b[^\n]*\bpush\b[^\n]*--?force/, // git push --force (other order)
-    /git\s+reset\s+--hard/, // destructive git discard (without path control)
-    /chmod\s+-r\s+777\s+\//, // chmod root (command is lowercased before matching)
-    /shutdown|reboot|halt\b/, // machine control
-  ];
-  return patterns.some((re) => re.test(c));
-}
+/**
+ * @returns true when a command looks intentionally destructive. Canonical
+ * implementation lives in approval.ts (shared with the approval gate);
+ * re-exported here for compatibility with existing imports/tests.
+ */
+export { isDangerousCommand } from '../approval.js';
 
 
 // ── sub-agent spawning helpers ─────────────────────────────────────────────
@@ -611,6 +607,13 @@ const definitions: Record<string, ToolDefinition> = {
             `⛔ Command looks dangerous and was NOT run:\n  ${command}\n` +
             `Edit the command to be more specific, or re-run with "force": true to confirm.`,
         };
+      }
+      // Approval gate (when wired): 'dangerous' prompts for risky commands,
+      // 'all' prompts for everything, 'off' never prompts. Decisions are the
+      // user's; the agent just sees the result.
+      if (ctx.approvalGate && !args.force) {
+        const verdict = await ctx.approvalGate.check({ command, cwd: ctx.cwd });
+        if (!verdict.allow) return { ok: false, text: verdict.text ?? 'Command not approved.' };
       }
       return runShell(command, {
         cwd: args.cwd ? safeResolve(args.cwd, ctx.cwd) : ctx.cwd,

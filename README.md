@@ -40,6 +40,25 @@ astrocode -m gpt-4o             # override the model
 astrocode serve                 # run as an MCP server over stdio
 ```
 
+### Headless mode (scripts, CI, pipes)
+
+```bash
+astrocode -p "explain what changed in git diff --staged"
+echo "the log output" | astrocode -p "find the root cause"   # stdin prepends
+astrocode -p --json "list every TODO in src/" > report.json  # machine output
+astrocode -p -c my-session "continue where we left off"      # resume /save
+astrocode -p --plan "how would you add auth?"                # read-only
+```
+
+`-p/--print` runs the same agent loop as the TUI, streams the final answer,
+and exits with a meaningful code: `0` ok, `1` error, `2` verification failed.
+With `--json` stdout is a single JSON document (`answer`, `turns`, `costUsd`,
+`usage`, `messages`) safe to pipe into `jq`.
+
+```bash
+astrocode -p "summarize the last commit" | astrocode -p "turn this summary into release notes"
+```
+
 ## Connecting a model
 
 The easy way: start the TUI, type `/login`, pick a provider, and paste your
@@ -70,6 +89,17 @@ You: add rate limiting to the login endpoint
 
 ❯ astrocode · reading src/routes/auth.ts · editing · running tests
 ```
+
+While the agent works you can keep typing: **Enter queues** your prompt and it
+runs when the current turn finishes, and **Esc interrupts** the agent mid-turn
+(your typed text is kept for editing). Type `!cmd` to run a shell command
+yourself — the agent isn't involved and doesn't see the output.
+
+In `dangerous` or `all` shell-approval mode, `run_command` prompts before
+executing: `y` runs once, `a` always allows that command prefix for the
+session, `n`/`Esc` declines. Cycle the mode in `/settings` (or set
+`ASTROCODE_APPROVAL_MODE`), and pre-approve trusted prefixes with
+`ASTROCODE_APPROVE="npm test, git status"`.
 
 There are two modes. `/plan` is read-only: reads, searches, and proposals
 only, with writes and commands blocked at the tool layer rather than
@@ -126,6 +156,8 @@ Agents and extensions:
 | --- | --- |
 | `↑` / `↓` | Prompt history |
 | `Tab` | Complete slash commands |
+| `Enter` (while busy) | Queue the prompt for after the current turn |
+| `Esc` (while busy) | Interrupt the running agent (typed text is kept) |
 | `PgUp` / `PgDn` | Scroll the transcript |
 | `Ctrl+U` | Clear the input line |
 | `Ctrl+K` | Selection mode — `Enter` copies, `Esc` cancels |
@@ -173,6 +205,13 @@ intact; auto-compact fires around 85%, so long sessions degrade instead of
 dying on a provider length error. Every tool result also passes through a
 central head-and-tail truncator, so one `read_file` on a minified bundle can't
 evict the conversation.
+
+**Cost & context accuracy.** When the provider reports usage (OpenAI-family
+`stream_options.include_usage`, Responses API `response.completed`, and
+gateways that forward either), cost, the context meter, and budget enforcement
+use the real numbers — including prompt-cache discounts — falling back to the
+chars÷4 estimate only when a server reports nothing. Pricing covers current
+OpenAI (GPT-5/4.1/o-series), Anthropic, Gemini, DeepSeek, and more.
 
 **Undo, rewind, guardrails.** Every write/edit snapshots the original file for
 `/undo`; `/rewind` restores the whole working tree to how it looked before the
@@ -231,6 +270,10 @@ astrocode [options]
 
   -d, --demo         Force offline demo mode (no API key needed)
   -m, --model <n>    Set the model (e.g. gpt-4o)
+  -p, --print <task> One-shot headless run; prints the answer and exits
+      --json         With -p: emit a single JSON document
+  -c, --continue <n> With -p: resume a saved session
+      --plan         With -p: read-only plan mode
       --cwd <path>   Working directory (default: current)
       --serve        Run as an MCP server over stdio
   -h, --help         Show help
@@ -250,6 +293,8 @@ astrocode serve [--cwd <path>]    # same as --serve
 | `ASTROCODE_BUDGET` | Hard USD spend ceiling per session (`0` = none) | `0` |
 | `ASTROCODE_VERIFY` | Run lint/tests after edits (`1`/`true`) | off |
 | `ASTROCODE_AUTOCOMMIT` | Commit changes after a turn (`1`/`true`) | off |
+| `ASTROCODE_APPROVAL_MODE` | Shell approval for run_command: `off`/`dangerous`/`all` | `off` |
+| `ASTROCODE_APPROVE` | Pre-approved command prefixes, comma-separated | – |
 | `ASTROCODE_THEME` | Color theme (see `/theme`) | `astro` |
 | `ASTROCODE_SESSION_DIR` | Where `/save` sessions live | `~/.astrocode/sessions` |
 | `ASTROCODE_CONFIG_DIR` | Config directory | `~/.astrocode` |

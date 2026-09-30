@@ -29,6 +29,23 @@ export class LocalProvider implements AIProvider {
 
     await this.sleep(80);
 
+    // After a tool result arrives, wrap up instead of calling another tool.
+    // Without this the demo loop re-triggers the same tool every turn until
+    // the turn cap (it never reads results), which spins the pipeline.
+    const last = options.messages[options.messages.length - 1];
+    if (last?.role === 'tool') {
+      const answer = `✦ Demo mode wrap-up: I executed the tool above${
+        typeof last.content === 'string' && last.content
+          ? ` and got ${last.content.length} chars of result`
+          : ''
+      }. With a real model I'd interpret it and continue the task — connect one via ASTROCODE_API_KEY.`;
+      for (const ch of answer) {
+        options.onToken({ type: 'text', text: ch });
+        await this.sleep(2);
+      }
+      return { role: 'assistant', content: answer };
+    }
+
     // Exercise the tool pipeline so the reviewer sees tool cards.
     const toolTriggers =
       /(^|\s)(list|ls|dir|tree|run|execute|shell|grep|search|show.?dir)/;

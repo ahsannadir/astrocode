@@ -1,6 +1,7 @@
 import type { AppConfig } from './types.js';
 import { loadAuth } from './auth.js';
 import { providerById } from './providers.js';
+import { normalizeApprovalMode } from './approval.js';
 
 export const DEFAULT_SYSTEM_PROMPT = `You are AstroCode, a brilliant AI terminal coding agent running in the user's terminal.
 You help the user build, understand, and modify code in their workspace.
@@ -27,6 +28,14 @@ export interface CliArgs {
   cwd?: string;
   help: boolean;
   version: boolean;
+  /** Headless one-shot: the task text (present when -p/--print was given). */
+  print?: string;
+  /** With -p: emit JSON instead of a text transcript. */
+  json?: boolean;
+  /** With -p: resume a saved session by name. */
+  continueSession?: string;
+  /** With -p: read-only plan mode. */
+  plan?: boolean;
 }
 
 export function parseArgs(argv: string[]): CliArgs {
@@ -55,9 +64,25 @@ export function parseArgs(argv: string[]): CliArgs {
       case '--cwd':
         args.cwd = argv[++i];
         break;
+      case '--print':
+      case '-p':
+        args.print = argv[++i] ?? '';
+        break;
+      case '--json':
+        args.json = true;
+        break;
+      case '--continue':
+      case '-c':
+        args.continueSession = argv[++i];
+        break;
+      case '--plan':
+        args.plan = true;
+        break;
       default:
         if (a.startsWith('--model=')) args.model = a.slice('--model='.length);
         else if (a.startsWith('--cwd=')) args.cwd = a.slice('--cwd='.length);
+        else if (a.startsWith('--print=')) args.print = a.slice('--print='.length);
+        else if (a.startsWith('--continue=')) args.continueSession = a.slice('--continue='.length);
         break;
     }
   }
@@ -123,6 +148,9 @@ export function loadConfig(args: CliArgs): AppConfig {
       : stored?.autocommit === true;
   const theme =
     process.env.ASTROCODE_THEME?.trim() || stored?.theme;
+  const approvalMode = normalizeApprovalMode(
+    process.env.ASTROCODE_APPROVAL_MODE ?? stored?.approvalMode,
+  );
 
   return {
     apiKey,
@@ -136,6 +164,7 @@ export function loadConfig(args: CliArgs): AppConfig {
     budget,
     verify,
     autocommit,
+    approvalMode,
   };
 }
 

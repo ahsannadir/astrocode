@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { appendFileSync } from 'node:fs';
 import { Box, Text, useInput } from 'ink';
 import { theme } from './theme.js';
 import type { PlanMode } from '../types.js';
+import type { ApprovalMode } from '../approval.js';
 
 interface Props {
   mode: PlanMode;
   verify: boolean;
   autocommit: boolean;
+  approvalMode: ApprovalMode;
   maxToolTurns: number;
   budget: number;
   model: string;
@@ -16,6 +17,8 @@ interface Props {
   onCycleMode: () => void;
   onToggleVerify: () => void;
   onToggleAutocommit: () => void;
+  /** Cycle shell-approval mode: off → dangerous → all → off. */
+  onCycleApproval: () => void;
   onCycleTurns: () => void;
   onCycleBudget: () => void;
   /** Close settings and open the model picker. */
@@ -43,6 +46,7 @@ export function SettingsMenu({
   mode,
   verify,
   autocommit,
+  approvalMode,
   maxToolTurns,
   budget,
   model,
@@ -51,6 +55,7 @@ export function SettingsMenu({
   onCycleMode,
   onToggleVerify,
   onToggleAutocommit,
+  onCycleApproval,
   onCycleTurns,
   onCycleBudget,
   onPickModel,
@@ -63,6 +68,17 @@ export function SettingsMenu({
       value: mode === 'plan' ? 'plan (read-only)' : 'act (full access)',
       kind: 'cycle',
       run: onCycleMode,
+    },
+    {
+      label: 'Shell approval',
+      value:
+        approvalMode === 'all'
+          ? 'every command'
+          : approvalMode === 'dangerous'
+            ? 'risky commands'
+            : 'off',
+      kind: 'cycle',
+      run: onCycleApproval,
     },
     {
       label: 'Verify on edits',
@@ -106,14 +122,6 @@ export function SettingsMenu({
 
   useInput(
     (input, key) => {
-      try {
-        appendFileSync(
-          '/tmp/key_debug.log',
-          `SM t=${Date.now() % 100000} input=${JSON.stringify(input)} esc=${key.escape} ret=${key.return} up=${key.upArrow} down=${key.downArrow} left=${key.leftArrow} right=${key.rightArrow} ctrl=${key.ctrl}\n`,
-        );
-      } catch {
-        /* debug */
-      }
       // Home/End move the highlight to the first/last row (Ink reports the
       // CSI H / CSI F sequences as raw input, not named keys).
       if (input === '[H' || input === 'OH') {
