@@ -10,6 +10,9 @@ import { LoginModal, type LoginMeta } from './LoginModal.js';
 import { ModelsModal } from './ModelsModal.js';
 import { SettingsMenu } from './SettingsMenu.js';
 import { ThemeModal } from './ThemeModal.js';
+import { ApprovalPrompt } from './ApprovalPrompt.js';
+import { ApprovalGate, normalizeApprovalMode, parseApproveEnv } from '../approval.js';
+import type { ApprovalDecision } from '../approval.js';
 import { theme, setTheme, THEME_NAMES } from './theme.js';
 import type { AppConfig, ChatMessage, PlanMode, TokenFragment } from '../types.js';
 import { createProvider } from '../ai/provider.js';
@@ -27,7 +30,7 @@ import {
   changesSinceLastBoundary,
   rewindTurn,
 } from '../undo.js';
-import { formatCost, pricingFor, estimateTokens, contextLimitFor, estimateContextTokens } from '../cost.js';
+import { formatCost, pricingFor, estimateTokens, costFromUsage, contextLimitFor, estimateContextTokens } from '../cost.js';
 import { loadMemory, getMemoryText } from '../memory.js';
 import { buildRepoMap, getRepoMap } from '../repomap.js';
 import { listTodos, clearTodos } from '../todos.js';
@@ -39,6 +42,7 @@ import {
   describeCompaction,
 } from '../compact.js';
 import type { CompactResult } from '../compact.js';
+import type { ApprovalMode } from '../approval.js';
 import type { AIProvider } from '../types.js';
 import { loadAuth, saveAuth, authFilePath, type AuthConfig } from '../auth.js';
 import { copyToClipboard } from '../clipboard.js';
@@ -55,6 +59,7 @@ interface Props {
 const BANNER_H = 7; // header(1) + 5 logo rows + footer(1)
 const STATUS_H = 3; // bordered status bar: top border + content + bottom border
 const PROMPT_H = 4; // hint line(1) + bordered input box(3)
+const APPROVAL_H = 5; // bordered approval prompt: title + command + cwd + hint + borders
 const MIN_MESSAGE_H = 3; // keep at least one content line + breathing room
 
 // Cycle options for the /settings menu (module-level so they stay static).
@@ -88,6 +93,17 @@ export function App({ config, cwd }: Props) {
   const [modal, setModal] = useState<null | 'login' | 'models' | 'settings' | 'theme'>(null);
   const [themeName, setThemeName] = useState('astro');
   const [copyMode, setCopyMode] = useState(false);
+  // ---- shell approval (run_command gating) ----
+  const [pendingApproval, setPendingApproval] = useState<{ command: string; resolve: (d: ApprovalDecision) => void } | null>(null);
+  const [approvalMode, setApprovalMode] = useState<ApprovalMode>(
+    () => normalizeApprovalMode(config.approvalMode ?? process.env.ASTROCODE_APPROVAL_MODE),
+  );
+  const approvalGateRef = useRef<ApprovalGate>(
+    new ApprovalGate(approvalMode, parseApproveEnv(process.env.ASTROCODE_APPROVE)),
+  );
+  // ---- queued prompts typed while the agent is busy ----
+  const [queue, setQueue] = useState<string[]>([]);
+  const queueRef = useRef<string[]>([]);
   const [connected, setConnected] = useState(!config.demo);
   const [providerId, setProviderId] = useState<string>(
     () => loadAuth()?.provider ?? PROVIDERS[0].id,
@@ -138,9 +154,12 @@ export function App({ config, cwd }: Props) {
             ? Math.min(THEME_NAMES.length, themeCap) + 5
             : 0;
   const promptH = modal !== null ? modalH : PROMPT_H;
+  // The approval prompt replaces the input box visually but still costs rows.
+  const approvalH = pendingApproval ? APPROVAL_H : 0;
+  const queueH = queue.length > 0 ? 1 : 0;
   const messageHeight = Math.max(
     MIN_MESSAGE_H,
-    rows - BANNER_H - STATUS_H - promptH - slashMenuH - todoH,
+    rows - BANNER_H - STATUS_H - promptH - slashMenuH - todoH - approvalH - queueH,
   );
   const sel = Math.max(0, Math.min(slashSel, Math.max(0, slashMatches.length - 1)));
   const acceptSlash = useCallback(() => {
@@ -313,6 +332,29 @@ export function App({ config, cwd }: Props) {
     [bump],
   );
 
+  // ---- shell approval: surface the prompt and await the user's decision ----
+  // Installed once; the gate calls ask() synchronously from inside
+  // run_command's handler, which awaits the promise until a key lands.
+  useEffect(() => {
+    approvalGateRef.current.setAsker(
+      (req) =>
+        new Promise<ApprovalDecision>((resolve) => {
+          setPendingApproval({ command: req.command, resolve });
+        }),
+    );
+    return () => approvalGateRef.current.setAsker(() => Promise.resolve('denied'));
+  }, []);
+
+  const handleApproval = useCallback(
+    (d: ApprovalDecision) => {
+      setPendingApproval((p) => {
+        p?.resolve(d);
+        return null;
+      });
+    },
+    [],
+  );
+
   const setModel = useCallback(
     (m: string) => {
       setModelState(m);
@@ -460,6 +502,22 @@ export function App({ config, cwd }: Props) {
     () => persistSettings({ autocommit: !configRef.current.autocommit }),
     [persistSettings],
   );
+  const handleCycleApproval = useCallback(() => {
+    const order: ApprovalMode[] = ['off', 'dangerous', 'all'];
+    const next = order[(order.indexOf(approvalGateRef.current.mode) + 1) % order.length];
+    approvalGateRef.current = new ApprovalGate(
+      next,
+      parseApproveEnv(process.env.ASTROCODE_APPROVE),
+    );
+    approvalGateRef.current.setAsker(
+      (req) =>
+        new Promise<ApprovalDecision>((resolve) => {
+          setPendingApproval({ command: req.command, resolve });
+        }),
+    );
+    setApprovalMode(next);
+    persistSettings({ approvalMode: next });
+  }, [persistSettings]);
   const handleCycleTurns = useCallback(
     () =>
       persistSettings({
@@ -555,14 +613,55 @@ export function App({ config, cwd }: Props) {
   }, []);
 
 
+  /** Queue a prompt typed while the agent is mid-turn. */
+  const enqueuePrompt = useCallback(
+    (v: string) => {
+      if (v.startsWith('/')) {
+        pushItem({ kind: 'system', text: "Slash commands can't be queued — run them when the agent is idle." });
+        return;
+      }
+      queueRef.current.push(v);
+      setQueue([...queueRef.current]);
+      pushItem({ kind: 'system', text: `⏳ Queued — runs when the current turn finishes.` });
+    },
+    [pushItem],
+  );
+
   // ---- agent ----
   const handleSubmit = useCallback(
     async (raw: string) => {
-      if (busyRef.current) return;
       const value = raw.trim();
       if (!value) return;
       setInput('');
       setHistory((h) => [...h, value].slice(-100));
+
+      // While busy, only queue non-command prompts; commands still need to
+      // wait (the slash flow isn't reentrant). Slashes typed during a turn
+      // are queued as plain messages instead of being dropped silently.
+      if (busyRef.current) {
+        enqueuePrompt(value);
+        return;
+      }
+
+      // `!cmd` shell passthrough: run it YOURSELF, no model involved. Output
+      // goes to the transcript; the agent does not see it unless you ask.
+      if (value.startsWith('!')) {
+        const cmd = value.slice(1).trim();
+        if (!cmd) {
+          pushItem({ kind: 'system', text: 'Usage: !<command> — run a shell command yourself (agent not involved).' });
+          return;
+        }
+        pushItem({ kind: 'user', text: value });
+        pushItem({ kind: 'tool_start', name: 'bash', args: JSON.stringify({ command: cmd }) });
+        const r = await runShell(cmd, { cwd, timeoutMs: 120_000 });
+        pushItem({
+          kind: r.ok ? 'tool_result' : 'error',
+          name: 'bash',
+          ok: r.ok,
+          text: r.text,
+        });
+        return;
+      }
 
       // Slash commands
       if (value.startsWith('/')) {
@@ -691,7 +790,7 @@ export function App({ config, cwd }: Props) {
       convRef.current.push({ role: 'user', content: value });
       await runAgentRef.current?.();
     },
-    [pushItem, setModel, setModal, exit, runAgentRef, sessionName, cwd, contextTokens, setSessionName],
+    [pushItem, setModel, setModal, exit, runAgentRef, sessionName, cwd, contextTokens, setSessionName, enqueuePrompt],
   );
 
   /**
@@ -788,7 +887,11 @@ export function App({ config, cwd }: Props) {
   const runAgent = useCallback(async () => {
     busyRef.current = true;
     setBusy(true);
-    const signal = abortRef.current?.signal;
+    // Fresh abort controller per turn — Esc resolves it and interrupts the
+    // provider stream + the tool loop (see the catch below).
+    const abort = new AbortController();
+    abortRef.current = abort;
+    const signal = abort.signal;
     let turns = 0;
     let fixAttempts = 0;
     let firstCommandSeen = false;
@@ -816,14 +919,15 @@ export function App({ config, cwd }: Props) {
     const ctxTok = estimateContextTokens(messagesForAgent);
     setContextTokens(ctxTok);
 
-    const charge = (inputText: string, outputText: string) => {
-      const p = pricingRef.current;
-      const inTok = estimateTokens(inputText);
-      const outTok = estimateTokens(outputText);
-      const delta =
-        (inTok / 1_000_000) * p.inputPerM + (outTok / 1_000_000) * p.outputPerM;
+    const charge = (
+      inputText: string,
+      outputText: string,
+      usage?: { inputTokens?: number; outputTokens?: number; cachedTokens?: number },
+    ) => {
+      // Real provider usage when reported; chars÷4 estimate otherwise.
+      const delta = costFromUsage(configRef.current.model, usage, inputText.length, outputText.length);
       costRef.current += delta;
-      tokensRef.current += outTok;
+      tokensRef.current += usage?.outputTokens ?? estimateTokens(outputText);
       setCostUsd(costRef.current);
       setTokenCount(tokensRef.current);
     };
@@ -899,7 +1003,8 @@ export function App({ config, cwd }: Props) {
             }
           },
         });
-        charge(inputSnapshot, outputText);
+        // Prefer the provider's real usage over the chars÷4 estimate.
+        charge(inputSnapshot, outputText, result.usage);
 
         if (result.tool_calls && result.tool_calls.length > 0) {
           convRef.current.push({
@@ -956,6 +1061,7 @@ export function App({ config, cwd }: Props) {
               provider: providerRef.current!,
               onCharge: charge,
               loopSensor: sensor,
+              approvalGate: approvalGateRef.current,
               onProgress: activityItem
                 ? (e: ToolProgressEvent) => updateAgentActivity(activityItem!, e)
                 : undefined,
@@ -1016,7 +1122,7 @@ export function App({ config, cwd }: Props) {
       }
     } catch (e: any) {
       if (e?.name === 'AbortError') {
-        pushItem({ kind: 'error', text: 'Turn aborted.' });
+        pushItem({ kind: 'system', text: '⏹ Turn interrupted (Esc). Type a follow-up or press Enter to continue.' });
       } else {
         pushItem({ kind: 'error', text: `Error: ${e?.message ?? e}` });
       }
@@ -1044,6 +1150,15 @@ export function App({ config, cwd }: Props) {
       busyRef.current = false;
       setBusy(false);
       abortRef.current = null;
+      // Drain the queue: prompts typed while the agent ran run now, one at a
+      // time (a queued prompt can itself turn busy, so one per drain).
+      const next = queueRef.current.shift();
+      if (next !== undefined) {
+        setQueue([...queueRef.current]);
+        pushItem({ kind: 'user', text: next });
+        convRef.current.push({ role: 'user', content: next });
+        void runAgentRef.current?.();
+      }
     }
   }, [cwd, pushItem, bump, buildSystemPrompt, setModel]);
   runAgentRef.current = runAgent;
@@ -1087,6 +1202,20 @@ export function App({ config, cwd }: Props) {
           {slashActive && (
             <SlashMenu matches={slashMatches} sel={sel} width={width} />
           )}
+          {queue.length > 0 && (
+            <Box paddingX={1}>
+              <Text color={theme.thinking}>
+                ⏳ {queue.length} queued prompt{queue.length === 1 ? '' : 's'}
+              </Text>
+            </Box>
+          )}
+          {pendingApproval && (
+            <ApprovalPrompt
+              command={pendingApproval.command}
+              cwd={cwd}
+              onDecision={handleApproval}
+            />
+          )}
           {copyMode && !busy ? (
             <Box marginTop={1} paddingX={1}>
               <Text color={theme.promptSymbol}>⬚ select mode — ↑/↓ move · Enter copy · Esc cancel</Text>
@@ -1103,7 +1232,10 @@ export function App({ config, cwd }: Props) {
                 onChange={setInput}
                 onSubmit={handleSubmit}
                 history={history}
-                disabled={busy}
+                disabled={pendingApproval !== null}
+                busy={busy}
+                onQueue={enqueuePrompt}
+                onAbort={() => abortRef.current?.abort()}
                 placeholder="Ask AstroCode anything — / for commands"
                 slashMatches={slashMatches}
                 slashSel={sel}
@@ -1140,6 +1272,7 @@ export function App({ config, cwd }: Props) {
               mode={mode}
               verify={configRef.current.verify}
               autocommit={configRef.current.autocommit}
+              approvalMode={approvalMode}
               maxToolTurns={configRef.current.maxToolTurns}
               budget={configRef.current.budget}
               model={model}
@@ -1148,6 +1281,7 @@ export function App({ config, cwd }: Props) {
               onCycleMode={handleCycleMode}
               onToggleVerify={handleToggleVerify}
               onToggleAutocommit={handleToggleAutocommit}
+              onCycleApproval={handleCycleApproval}
               onCycleTurns={handleCycleTurns}
               onCycleBudget={handleCycleBudget}
               onPickModel={() => setModal('models')}

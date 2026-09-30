@@ -12,8 +12,8 @@ import {
 } from '../src/cost.js';
 
 test('pricingFor: known models and default fallback', () => {
-  assert.deepEqual(pricingFor('gpt-4o'), { inputPerM: 2.5, outputPerM: 10 });
-  assert.deepEqual(pricingFor('claude-3-5-sonnet'), { inputPerM: 3, outputPerM: 15 });
+  assert.deepEqual(pricingFor('gpt-4o'), { inputPerM: 2.5, outputPerM: 10, cachedInputPerM: 1.25 });
+  assert.deepEqual(pricingFor('claude-3-5-sonnet'), { inputPerM: 3, outputPerM: 15, cachedInputPerM: 0.3 });
   assert.deepEqual(pricingFor('some-unknown-model'), { inputPerM: 1, outputPerM: 3 });
 });
 

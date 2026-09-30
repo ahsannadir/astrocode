@@ -3,6 +3,7 @@ import type {
   ChatMessage,
   StreamOptions,
   TokenFragment,
+  TokenUsage,
   ToolCall,
   ToolSchema,
 } from '../types.js';
@@ -16,6 +17,31 @@ export interface OpenaiProviderOptions {
 }
 
 const CLIENT_UA = 'astrocode/1.2.0';
+
+/**
+ * Extract token usage from a chat-completions chunk. OpenAI-family servers
+ * report it on the FINAL chunk when `stream_options.include_usage` was sent;
+ * several compatible gateways include it on every (or the last) chunk.
+ * Absent/null/zero usage means unknown — callers fall back to estimation.
+ */
+export function extractUsage(json: any): TokenUsage | undefined {
+  const u = json?.usage;
+  if (!u || typeof u !== 'object') return undefined;
+  const input = Number(u.prompt_tokens ?? u.input_tokens ?? 0);
+  const output = Number(u.completion_tokens ?? u.output_tokens ?? 0);
+  if (!Number.isFinite(input) || !Number.isFinite(output)) return undefined;
+  if (input <= 0 && output <= 0) return undefined;
+  const cachedRaw =
+    u.prompt_tokens_details?.cached_tokens ??
+    u.input_tokens_details?.cached_tokens ??
+    u.cache_read_input_tokens ??
+    u.cache_read_tokens ??
+    0;
+  const cached = Number(cachedRaw);
+  const usage: TokenUsage = { inputTokens: input, outputTokens: output };
+  if (Number.isFinite(cached) && cached > 0) usage.cachedTokens = cached;
+  return usage;
+}
 
 /**
  * User-Agent sent with every request. AgentRouter's gateway fingerprints
@@ -363,7 +389,7 @@ export class OpenaiProvider implements AIProvider {
     );
   }
 
-  async streamComplete(options: StreamOptions): Promise<ChatMessage> {
+  async streamComplete(options: StreamOptions): Promise<ChatMessage & { usage?: TokenUsage }> {
     if (this.usesResponsesApi) {
       return this.streamResponses(options);
     }
@@ -373,6 +399,10 @@ export class OpenaiProvider implements AIProvider {
       messages: serializeMessages(options.messages),
       tools: options.tools.length > 0 ? options.tools : undefined,
       stream: true,
+      // Ask for real usage on the final chunk (OpenAI ignores the extra
+      // field; some strict local servers reject unknown fields — those are
+      // exactly the ones that report usage on the last chunk anyway).
+      stream_options: { include_usage: true },
       temperature: 0.7,
     };
 
@@ -400,11 +430,12 @@ export class OpenaiProvider implements AIProvider {
   private async readStream(
     stream: ReadableStream<Uint8Array>,
     options: StreamOptions,
-  ): Promise<ChatMessage> {
+  ): Promise<ChatMessage & { usage?: TokenUsage }> {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
 
     let content = '';
+    let usage: TokenUsage | undefined;
     // Accumulate tool-call fragments keyed by their index in the deltas.
     const toolCallMap = new Map<
       number,
@@ -433,6 +464,8 @@ export class OpenaiProvider implements AIProvider {
             continue;
           }
           const choice = json.choices && json.choices[0];
+          const u = extractUsage(json);
+          if (u) usage = u;
           if (!choice) continue;
           const delta = choice.delta || {};
           if (typeof delta.content === 'string' && delta.content.length > 0) {
@@ -479,7 +512,7 @@ export class OpenaiProvider implements AIProvider {
       assistant.tool_calls = toolCalls;
       assistant.content = null;
     }
-    return assistant;
+    return usage ? { ...assistant, usage } : assistant;
   }
 
   /**
@@ -488,7 +521,7 @@ export class OpenaiProvider implements AIProvider {
    * text, `function_call_arguments.delta` streams tool args, and the final
    * `response.completed` payload is the authoritative source for the result.
    */
-  private async streamResponses(options: StreamOptions): Promise<ChatMessage> {
+  private async streamResponses(options: StreamOptions): Promise<ChatMessage & { usage?: TokenUsage }> {
     const url = `${this.baseUrl}/responses`;
     const res = await fetchWithRetry(url, {
       method: 'POST',
@@ -516,7 +549,7 @@ export class OpenaiProvider implements AIProvider {
   private async readResponsesStream(
     stream: ReadableStream<Uint8Array>,
     options: StreamOptions,
-  ): Promise<ChatMessage> {
+  ): Promise<ChatMessage & { usage?: TokenUsage }> {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     const state = createResponsesStreamState();
@@ -550,8 +583,15 @@ export class OpenaiProvider implements AIProvider {
 
     // The completed payload is authoritative; fall back to streamed state.
     if (state.finalResponse && Array.isArray(state.finalResponse.output)) {
-      return assistantFromResponsesOutput(state.finalResponse.output);
+      const assistant = assistantFromResponsesOutput(state.finalResponse.output);
+      const usage = extractUsage(state.finalResponse);
+      return usage ? { ...assistant, usage } : assistant;
     }
+    return this.finalFromStreamState(state);
+  }
+
+  /** Build the assistant message from accumulated stream state. */
+  private finalFromStreamState(state: ResponsesStreamState): ChatMessage & { usage?: TokenUsage } {
     const toolCalls: ToolCall[] = Array.from(state.callMap.values()).map((v) => ({
       id: v.call_id || `call_${Math.random().toString(36).slice(2, 10)}`,
       name: v.name,

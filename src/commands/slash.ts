@@ -147,9 +147,12 @@ Tips
 • Ctrl+K selects & copies clean text (no prefixes/chrome); /copy copies the last reply (or "all").
 • Type normally to chat with the agent; it streams responses live.
 • The agent uses tools (read/write/edit/list/search/git, run commands) autonomously.
+• While the agent runs: Enter QUEUES your prompt · Esc INTERRUPTS the turn.
+• !<cmd> runs a shell command yourself (agent not involved), e.g. !git status.
 • ↑/↓ in the prompt recall history · PgUp/PgDn scroll the transcript.
 • Set ASTROCODE_API_KEY / ASTROCODE_MODEL / ASTROCODE_BASE_URL for a live model.
-• ASTROCODE_BUDGET caps spending; /undo reverts the last file change.`;
+• ASTROCODE_BUDGET caps spending; /undo reverts the last file change.
+• Headless: astrocode -p "task" runs one shot and exits (see --json, -c, --plan).`;
 
 export async function runSlashCommand(
   raw: string,
