@@ -82,7 +82,11 @@ export ASTROCODE_BASE_URL=https://api.openai.com/v1   # falls back to OPENAI_BAS
 ## Using it
 
 Type what you want, in plain English. Start a line with `/` and a menu pops up
-that filters as you type (`↑`/`↓` to move, `Tab` or `Enter` to accept).
+that filters as you type: `↑`/`↓` scroll through every command, `Enter` runs
+the highlighted one, and `Tab` completes it into the line so you can keep
+typing arguments. `Esc` closes the menu without losing the line (press it
+again to clear). Informational commands (`/help`, `/cost`, `/status`, …) still
+work while the agent is mid-turn.
 
 ```text
 You: add rate limiting to the login endpoint
@@ -154,8 +158,9 @@ Agents and extensions:
 
 | Keys | Action |
 | --- | --- |
-| `↑` / `↓` | Prompt history |
-| `Tab` | Complete slash commands |
+| `↑` / `↓` | Prompt history (or browse the slash menu while it's open) |
+| `Tab` | Complete the highlighted slash command (then type arguments) |
+| `Enter` (menu open) | Run the highlighted slash command |
 | `Enter` (while busy) | Queue the prompt for after the current turn |
 | `Esc` (while busy) | Interrupt the running agent (typed text is kept) |
 | `PgUp` / `PgDn` | Scroll the transcript |

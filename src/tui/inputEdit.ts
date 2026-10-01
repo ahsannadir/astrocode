@@ -130,9 +130,10 @@ export function countBackspaces(input: string): number {
   return n;
 }
 
-/** Count how many times the left/right arrow appears in a coalesced chunk. */
-export function countArrow(input: string, dir: 'left' | 'right'): number {
-  const seq = dir === 'left' ? '\x1b[D' : '\x1b[C';
+/** Count how many times an arrow appears in a coalesced input chunk. */
+export function countArrow(input: string, dir: 'left' | 'right' | 'up' | 'down'): number {
+  const seq =
+    dir === 'left' ? '\x1b[D' : dir === 'right' ? '\x1b[C' : dir === 'up' ? '\x1b[A' : '\x1b[B';
   let n = 0;
   let i = input.indexOf(seq);
   while (i >= 0) {

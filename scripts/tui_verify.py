@@ -254,20 +254,18 @@ def main():
         if "/help" not in t.screen():
             failures.append(f"slash menu did not open:\n{t.screen()}")
 
-        # ---- 6. filter + navigate + accept ----
+        # ---- 6. filter, then Enter RUNS the highlighted command in one press ----
         t.send("pl")
         t.shot("07_slash_filtered")
         if "/plan" not in t.screen():
             failures.append(f"slash filter failed:\n{t.screen()}")
-        t.key("\x1b[B")  # ↓ to /act region? (filter 'pl' → /plan only) then Enter
-        t.key("\r")
-        t.shot("08_slash_accepted")
+        t.key("\r", wait=1.2)  # Enter runs /plan outright (no accept-then-Enter)
+        t.shot("08_slash_ran")
 
-        # ---- 7. run /plan and check the mode message ----
-        t.key("\r", wait=1.2)
+        # ---- 7. the mode message confirms that single Enter ran the command ----
         t.shot("09_plan_ran")
         if "PLAN mode" not in t.screen():
-            failures.append(f"/plan did not run:\n{t.screen()}")
+            failures.append(f"/plan did not run on one Enter:\n{t.screen()}")
 
         # ---- 8. back to act, open /theme modal ----
         t.send("/act\r", per_char_delay=0.03)
