@@ -22,7 +22,7 @@ import {
   PLAN_ALLOWED_TOOLS,
 } from '../tools/registry.js';
 import type { ToolProgressEvent } from '../tools/registry.js';
-import { runSlashCommand, SLASH_COMMANDS } from '../commands/slash.js';
+import { runSlashCommand, filterSlashCommands, SLASH_SAFE_WHILE_BUSY } from '../commands/slash.js';
 import { runShell } from '../tools/shell.js';
 import {
   revertLast,
@@ -86,6 +86,7 @@ export function App({ config, cwd }: Props) {
   const [costUsd, setCostUsd] = useState(0);
   const [gitBranch, setGitBranch] = useState('');
   const [slashSel, setSlashSel] = useState(0);
+  const [slashDismissed, setSlashDismissed] = useState(false);
   const [contextTokens, setContextTokens] = useState(0);
   const [contextLimit, setContextLimit] = useState(contextLimitFor(config.model));
   const [, setTodoVersion] = useState(0);
@@ -110,24 +111,35 @@ export function App({ config, cwd }: Props) {
   );
 
   // ---- slash-command overlay state ----
-  const slashNeedle = input.startsWith('/') && !busy ? input.slice(1) : null;
-  // Cap visible items so the menu + layout never exceeds the terminal height.
+  // The menu stays browsable while the agent is busy (informational commands
+  // run mid-turn), and it windows the FULL match list so "/" + ↑/↓ can reach
+  // every command instead of just the first screenful.
+  const slashNeedle = input.startsWith('/') ? input.slice(1) : null;
+  // Cap visible rows so the menu + layout never exceeds the terminal height.
   // Available = rows - BANNER_H - STATUS_H - PROMPT_H - MIN_MESSAGE_H - 3(menu chrome)
-  const maxSlashItems = Math.max(3, rows - BANNER_H - STATUS_H - PROMPT_H - MIN_MESSAGE_H - 3);
-  const slashMatches = useMemo(() => {
-    if (slashNeedle === null) return [];
-    const needle = slashNeedle.toLowerCase().trim();
-    const pool = !needle
-      ? SLASH_COMMANDS
-      : SLASH_COMMANDS.filter((c) => c.name.slice(1).toLowerCase().includes(needle));
-    return pool.slice(0, Math.min(8, maxSlashItems));
-  }, [slashNeedle, maxSlashItems]);
+  const slashRowCap = Math.min(
+    8,
+    Math.max(3, rows - BANNER_H - STATUS_H - PROMPT_H - MIN_MESSAGE_H - 3),
+  );
+  const slashMatches = useMemo(
+    () => (slashNeedle === null ? [] : filterSlashCommands(slashNeedle)),
+    [slashNeedle],
+  );
   const slashActive =
-    slashNeedle !== null && slashMatches.length > 0 && !busy;
+    slashNeedle !== null && slashMatches.length > 0 && !slashDismissed;
+  // Typing re-opens a dismissed menu, and a changed query re-ranks the list,
+  // so reset the highlight to the top match instead of leaving a stale index
+  // pointing at a different command than the one the user typed.
+  useEffect(() => {
+    setSlashDismissed(false);
+  }, [input]);
+  useEffect(() => {
+    setSlashSel(0);
+  }, [slashNeedle]);
 
   // ---- layout: account for the slash menu so total never exceeds terminal ----
-  // SlashMenu = top-border(1) + items(N) + hint(1) + bottom-border(1) = N + 3
-  const slashMenuH = slashActive ? slashMatches.length + 3 : 0;
+  // SlashMenu = top-border(1) + visible items(N) + hint(1) + bottom-border(1)
+  const slashMenuH = slashActive ? Math.min(slashMatches.length, slashRowCap) + 3 : 0;
   // Live task panel (only when there are todos). Title(1) + rows + borders(2),
   // plus one "earlier tasks hidden" notice row when the list was trimmed.
   const todos = listTodos();
@@ -162,18 +174,6 @@ export function App({ config, cwd }: Props) {
     rows - BANNER_H - STATUS_H - promptH - slashMenuH - todoH - approvalH - queueH,
   );
   const sel = Math.max(0, Math.min(slashSel, Math.max(0, slashMatches.length - 1)));
-  const acceptSlash = useCallback(() => {
-    const m = slashMatches[sel];
-    if (m) {
-      // Keep typed arguments that came after a space, else just the command.
-      const orig = input;
-      const sp = orig.indexOf(' ');
-      const argPart = sp > 0 ? orig.slice(sp) : '';
-      setInput(m.name + argPart);
-      setSlashSel(0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slashMatches, sel, input]);
   const moveSlash = useCallback((dir: 1 | -1) => {
     setSlashSel((s) => {
       const n = slashMatches.length;
@@ -617,7 +617,16 @@ export function App({ config, cwd }: Props) {
   const enqueuePrompt = useCallback(
     (v: string) => {
       if (v.startsWith('/')) {
-        pushItem({ kind: 'system', text: "Slash commands can't be queued — run them when the agent is idle." });
+        pushItem({
+          kind: 'system',
+          text:
+            "Slash commands can't be queued — this one needs the agent to be idle.\n" +
+            'Info commands (/help, /cost, /status, /context, /mode, …) still run mid-turn.',
+        });
+        return;
+      }
+      if (v.startsWith('!')) {
+        pushItem({ kind: 'system', text: "Shell commands (!cmd) can't be queued — run them when the agent is idle." });
         return;
       }
       queueRef.current.push(v);
@@ -635,12 +644,17 @@ export function App({ config, cwd }: Props) {
       setInput('');
       setHistory((h) => [...h, value].slice(-100));
 
-      // While busy, only queue non-command prompts; commands still need to
-      // wait (the slash flow isn't reentrant). Slashes typed during a turn
-      // are queued as plain messages instead of being dropped silently.
+      // While busy: informational slash commands (SLASH_SAFE_WHILE_BUSY) run
+      // immediately — they only read state. Everything else waits: ordinary
+      // prompts queue, and shell/slash input is refused with a visible reason
+      // instead of being sent to the model as a plain message.
       if (busyRef.current) {
-        enqueuePrompt(value);
-        return;
+        const head = (value.split(/\s+/)[0] ?? '').toLowerCase();
+        const safeMidTurn = value.startsWith('/') && SLASH_SAFE_WHILE_BUSY.has(head);
+        if (!safeMidTurn) {
+          enqueuePrompt(value);
+          return;
+        }
       }
 
       // `!cmd` shell passthrough: run it YOURSELF, no model involved. Output
@@ -1200,7 +1214,7 @@ export function App({ config, cwd }: Props) {
         <Box flexDirection="column" width="100%">
           {todos.length > 0 && <TodoPanel todos={todos} maxRows={6} width={width - 4} />}
           {slashActive && (
-            <SlashMenu matches={slashMatches} sel={sel} width={width} />
+            <SlashMenu matches={slashMatches} sel={sel} width={width} maxRows={slashRowCap} />
           )}
           {queue.length > 0 && (
             <Box paddingX={1}>
@@ -1234,13 +1248,12 @@ export function App({ config, cwd }: Props) {
                 history={history}
                 disabled={pendingApproval !== null}
                 busy={busy}
-                onQueue={enqueuePrompt}
                 onAbort={() => abortRef.current?.abort()}
                 placeholder="Ask AstroCode anything — / for commands"
-                slashMatches={slashMatches}
+                slashMatches={slashActive ? slashMatches : []}
                 slashSel={sel}
                 onSlashMove={moveSlash}
-                onSlashAccept={acceptSlash}
+                onSlashDismiss={() => setSlashDismissed(true)}
                 onCopyMode={() => {
                   if (!busy) setCopyMode(true);
                 }}

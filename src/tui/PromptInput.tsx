@@ -10,18 +10,18 @@ import {
   moveCursorRight,
   normalizePaste,
 } from './inputEdit.js';
+import { resolveSlashSubmission } from '../commands/slash.js';
 import type { SlashCommandDef } from '../commands/slash.js';
 
 interface Props {
   value: string;
   onChange: (v: string) => void;
+  /** Submit a prompt or slash command. App decides queueing vs running. */
   onSubmit: (v: string) => void;
   history: string[];
   disabled: boolean;
-  /** Agent is mid-turn: Enter QUEUES the prompt, Esc interrupts the turn. */
+  /** Agent is mid-turn: Enter submits (App queues or refuses), Esc interrupts. */
   busy?: boolean;
-  /** Called with the typed text when the user submits while busy. */
-  onQueue?: (v: string) => void;
   /** Called when the user presses Esc while the agent is busy (interrupt). */
   onAbort?: () => void;
   placeholder: string;
@@ -30,7 +30,8 @@ interface Props {
   /** Currently highlighted slash command index. */
   slashSel: number;
   onSlashMove: (dir: 1 | -1) => void;
-  onSlashAccept: () => void;
+  /** Called when the user presses Esc with the slash menu open (dismiss it). */
+  onSlashDismiss?: () => void;
   /** Enter text-selection mode over the chat area (Ctrl+K). */
   onCopyMode?: () => void;
 }
@@ -39,13 +40,27 @@ interface Props {
  * A full-featured single-line text input: cursor navigation, insert/delete,
  * robust backspace (works whether the terminal emits \b or DEL — Ink reports
  * them as `key.backspace` and `key.delete` respectively), Ctrl+W word
- * delete, Ctrl+U clear, Ctrl+K line-tail delete, Home/End (also Ctrl+A/E),
- * history recall (↑/↓ when there's text), paste support, Enter to submit,
- * and Tab autocomplete with a slash-command menu (↑/↓ highlight, Enter/→/Tab
- * select). The cursor is clamped against the value on every render, so
- * external value changes (history recall, autocomplete, submit) can never
- * leave it pointing past the end of the line — the classic "backspace
- * deletes nothing" bug.
+ * delete, Ctrl+U clear, Ctrl+K copy mode, Home/End (also Ctrl+A/E), history
+ * recall, paste support, and the slash-command menu.
+ *
+ * Slash menu key model — one keypress per intent, no double-Enter dance:
+ * - ↑/↓ browse every command (the menu scrolls under the highlight).
+ * - Enter RUNS a command: the one typed in full if it is complete, otherwise
+ *   the highlighted one. Typing `/model` can never be "completed" into
+ *   `/models`, and a partial `/he` runs `/help` immediately.
+ * - Tab completes the highlighted name into the line (caret at the end) so
+ *   arguments can be typed right away.
+ * - Esc closes the menu but KEEPS the line; Esc again (menu closed) clears it.
+ * - ←/→ are plain caret movement — they no longer hijack a normal editing
+ *   key to accept a suggestion.
+ *
+ * Terminals (and PTY batching) coalesce rapid keypresses into one input
+ * chunk, so Backspace×3 can arrive as `\x7f\x7f\x7f` and ↑↑ as
+ * `\x1b[A\x1b[A` with no key flags set. Those bursts are counted and applied
+ * one step per key. The cursor is clamped against the value on every render,
+ * so external value changes (history recall, autocomplete, submit) can never
+ * leave it pointing past the end of the line — the classic "backspace deletes
+ * nothing" bug.
  */
 export function PromptInput({
   value,
@@ -54,13 +69,12 @@ export function PromptInput({
   history,
   disabled = false,
   busy = false,
-  onQueue,
   onAbort,
   placeholder,
   slashMatches,
   slashSel,
   onSlashMove,
-  onSlashAccept,
+  onSlashDismiss,
   onCopyMode,
 }: Props) {
   const [cursor, setCursor] = useState(value.length);
@@ -72,6 +86,21 @@ export function PromptInput({
   // Clamp the cursor whenever the value changes externally (history recall,
   // autocomplete, programmatic clear). Effect-free: computed per render.
   const clamped = Math.min(Math.max(0, cursor), value.length);
+
+  /**
+   * Complete the highlighted command into the line (Tab), caret at the end.
+   * Keeps any typed arguments after a space; the explicit cursor move is what
+   * makes "accept then type args" land in the right place instead of mid-word.
+   */
+  const completeHighlighted = (from: string): void => {
+    const m = slashMatches[slashSel];
+    if (!m) return;
+    const sp = from.indexOf(' ');
+    const argPart = sp > 0 ? from.slice(sp) : '';
+    const next = m.name + argPart;
+    onChange(next);
+    setCursor(next.length);
+  };
 
   useInput(
     (input, key) => {
@@ -132,12 +161,18 @@ export function PromptInput({
         }
         return;
       }
-      // ---- interrupt / clear ----
+
+      // ---- interrupt / close menu / clear ----
       // Esc: while the agent runs, INTERRUPT the turn (the typed line is
-      // kept so it can be edited and queued); when idle, clear the line.
+      // kept so it can be edited and queued). With the slash menu open, close
+      // the menu but keep the line; otherwise clear the line.
       if (key.escape) {
         if (busy) {
           onAbort?.();
+          return;
+        }
+        if (slashActive) {
+          onSlashDismiss?.();
           return;
         }
         if (value !== '') {
@@ -146,8 +181,6 @@ export function PromptInput({
         }
         return;
       }
-      // Ctrl+K again with selection mode open is handled above; plain
-      // Ctrl+K-line-tail is omitted so Ctrl+K keeps its copy binding.
 
       // ---- movement ----
       // Arrow bursts coalesce like backspaces: '\x1b[D\x1b[D' arrives as one
@@ -162,11 +195,7 @@ export function PromptInput({
       }
       const nRight = countArrow(input, 'right');
       if (key.rightArrow || nRight > 0) {
-        // In slash mode, → selects the highlighted command (like other agents).
-        if (slashActive && slashMatches[slashSel]) {
-          onSlashAccept();
-          return;
-        }
+        // Plain caret movement: → must not silently accept a slash suggestion.
         let cur = clamped;
         let n = Math.max(1, nRight);
         while (n-- > 0) cur = moveCursorRight(value, cur);
@@ -184,56 +213,52 @@ export function PromptInput({
         return;
       }
 
-      // ---- submit / queue / slash selection ----
+      // ---- submit / slash selection ----
       if (key.return) {
         if (slashActive) {
-          const v = value.trim().toLowerCase();
-          const sel = slashMatches[slashSel];
-          // If the typed command already equals the highlighted one, run it.
-          if (sel && v === sel.name.toLowerCase()) {
-            if (busy) onQueue?.(value.trim());
-            else onSubmit(value);
-          } else if (sel) {
-            onSlashAccept();
+          // Run, don't merely complete: the full typed command wins, else the
+          // highlighted one. App routes this (queue while busy / run now).
+          const cmd = resolveSlashSubmission(value, slashMatches, slashSel);
+          if (cmd) {
+            onSubmit(cmd);
+            return;
           }
-          return;
         }
         const v = value.trim();
         if (!v) return;
-        if (busy) {
-          // Agent mid-turn: queue the message instead of dropping it.
-          onQueue?.(v);
-          return;
-        }
         onSubmit(v);
         return;
       }
 
       // ---- history / slash navigation ----
-      if (key.upArrow) {
+      const nUp = countArrow(input, 'up');
+      if (key.upArrow || nUp > 0) {
+        const n = Math.max(1, nUp);
         if (slashActive) {
-          onSlashMove(-1);
+          for (let i = 0; i < n; i++) onSlashMove(-1);
           return;
         }
         if (value === '') return; // let the message pane scroll the chat
         if (history.length === 0) return;
-        let idx = histIdx === null ? history.length - 1 : histIdx - 1;
-        if (idx < 0) idx = 0;
         if (histIdx === null) snapshotRef.current = value;
+        const base = histIdx === null ? history.length - 1 : histIdx - 1;
+        const idx = Math.max(0, base - (n - 1));
         setHistIdx(idx);
         const v = history[idx] ?? '';
         onChange(v);
         setCursor(v.length);
         return;
       }
-      if (key.downArrow) {
+      const nDown = countArrow(input, 'down');
+      if (key.downArrow || nDown > 0) {
+        const n = Math.max(1, nDown);
         if (slashActive) {
-          onSlashMove(1);
+          for (let i = 0; i < n; i++) onSlashMove(1);
           return;
         }
         if (value === '') return; // let the message pane scroll the chat
         if (histIdx === null) return;
-        const next = histIdx + 1;
+        const next = histIdx + n;
         if (next >= history.length) {
           setHistIdx(null);
           onChange(snapshotRef.current);
@@ -247,12 +272,9 @@ export function PromptInput({
         return;
       }
 
-      // ---- Tab: autocomplete / pick the highlighted command ----
+      // ---- Tab: complete the highlighted command (then type arguments) ----
       if (key.tab) {
-        if (slashActive) {
-          const sel = slashMatches[slashSel];
-          if (sel) onSlashAccept();
-        }
+        if (slashActive) completeHighlighted(value);
         return;
       }
 
@@ -275,14 +297,11 @@ export function PromptInput({
           }
           if (endsWithSubmit) {
             if (slashActive) {
-              const selCmd = slashMatches[slashSel];
-              const typed = nextValue.trim().toLowerCase();
-              if (selCmd && typed === selCmd.name.toLowerCase()) {
-                onSubmit(nextValue);
-              } else if (selCmd) {
-                onSlashAccept();
+              const cmd = resolveSlashSubmission(nextValue, slashMatches, slashSel);
+              if (cmd) {
+                onSubmit(cmd);
+                return;
               }
-              return;
             }
             const t = nextValue.trim();
             if (t) onSubmit(t);

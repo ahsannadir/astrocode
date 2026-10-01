@@ -52,6 +52,22 @@ conventions, build commands, and anything the agent should always know here.
   billed at the model's cache rate. Falls back to chars÷4 when a server
   reports nothing. `Provider.streamComplete` may return `usage`.
 
+## Slash-menu invariants (v1.3+ UX fixes)
+- Filtering/ranking and Enter resolution are pure helpers in
+  `src/commands/slash.ts`: `filterSlashCommands` (exact > prefix > substring,
+  whitespace closes the menu) and `resolveSlashSubmission` (a fully typed
+  command always wins over the highlighted one — `/model` must never morph
+  into `/models`).
+- The menu windows over the FULL match list (SlashMenu `maxRows`), so `/` +
+  ↑/↓ can reach every command; `slashSel` resets whenever the query changes.
+- Enter RUNS the command, Tab completes it into the line with the caret at the
+  end (so arguments land after the command, not mid-word), Esc dismisses the
+  menu without clearing the line (a second Esc clears).
+- While the agent is busy the menu still shows; only
+  `SLASH_SAFE_WHILE_BUSY` informational commands run mid-turn and everything
+  else is refused with a message — shell/slash input must never be queued as
+  a model message.
+
 ## Harness invariants (do not regress)
 - **Tool results are bounded centrally** in `executeTool` via
   `truncateToolText` (`src/tooloutput.ts`) — never add a tool that returns

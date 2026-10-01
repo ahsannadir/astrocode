@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   backspaceAt,
+  countArrow,
   deleteForwardAt,
   deleteWordBefore,
   insertAtCursor,
@@ -94,6 +95,14 @@ test('insertAtCursor: multi-char input is treated as a paste', () => {
   assert.deepEqual(insertAtCursor('ac', 1, 'bbb'), { value: 'abbbc', cursor: 4 });
   assert.deepEqual(insertAtCursor('', 0, 'x\ny'), { value: 'x y', cursor: 3 });
   assert.equal(insertAtCursor('', 0, '\x1b[201~'), null); // paste of pure markers
+});
+
+test('countArrow: counts coalesced arrow bursts in all four directions', () => {
+  assert.equal(countArrow('\x1b[A\x1b[A\x1b[A', 'up'), 3);
+  assert.equal(countArrow('\x1b[B\x1b[B', 'down'), 2);
+  assert.equal(countArrow('\x1b[D\x1b[D', 'left'), 2);
+  assert.equal(countArrow('\x1b[C', 'right'), 1);
+  assert.equal(countArrow('plain', 'up'), 0);
 });
 
 test('insertAtCursor: out-of-range cursor is refused', () => {

@@ -127,6 +127,70 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: '/quit', description: 'Quit AstroCode', usage: '/quit' },
 ];
 
+/**
+ * Informational commands that only read state (no writes, no modals, no turn
+ * mutation), so they stay usable while the agent is mid-turn. Every other
+ * command must wait for the current turn to finish.
+ */
+export const SLASH_SAFE_WHILE_BUSY: ReadonlySet<string> = new Set([
+  '/help',
+  '/copy',
+  '/cost',
+  '/mode',
+  '/status',
+  '/tools',
+  '/agents',
+  '/todo',
+  '/context',
+  '/memory',
+  '/whoami',
+  '/stars',
+]);
+
+/**
+ * Filter the command list for the "/" menu. Ranking is exact name first,
+ * then commands that START with the needle, then commands that merely
+ * contain it — stable by declaration order inside each group — so the top
+ * row is always the most likely command as the user types. Any whitespace in
+ * the needle means arguments are being typed, which closes the menu.
+ */
+export function filterSlashCommands(rawNeedle: string): SlashCommandDef[] {
+  if (/\s/.test(rawNeedle)) return [];
+  const needle = rawNeedle.toLowerCase();
+  if (!needle) return [...SLASH_COMMANDS];
+  const ranked: { cmd: SlashCommandDef; rank: number; idx: number }[] = [];
+  SLASH_COMMANDS.forEach((cmd, idx) => {
+    const name = cmd.name.slice(1).toLowerCase();
+    const rank =
+      name === needle ? 0 : name.startsWith(needle) ? 1 : name.includes(needle) ? 2 : -1;
+    if (rank >= 0) ranked.push({ cmd, rank, idx });
+  });
+  ranked.sort((a, b) => a.rank - b.rank || a.idx - b.idx);
+  return ranked.map((r) => r.cmd);
+}
+
+/**
+ * Decide what Enter RUNS while the slash menu is open. A command typed in
+ * full always wins (so "/model" is never morphed into "/models" just because
+ * the latter is highlighted); otherwise the highlighted command runs with any
+ * typed arguments preserved. Returns null when there is nothing to run.
+ */
+export function resolveSlashSubmission(
+  typed: string,
+  matches: SlashCommandDef[],
+  sel: number,
+): string | null {
+  const value = typed.trim();
+  if (!value) return null;
+  const exact = matches.find((c) => c.name.toLowerCase() === value.toLowerCase());
+  if (exact) return exact.name;
+  const m = matches[sel];
+  if (!m) return null;
+  const sp = typed.indexOf(' ');
+  const argPart = sp > 0 ? typed.slice(sp) : '';
+  return m.name + argPart;
+}
+
 const HELP_TEXT = `AstroCode slash commands
 ────────────────────────────
 ${SLASH_COMMANDS.map((c) => `${c.name.padEnd(12)} ${c.description}`).join('\n')}
@@ -138,7 +202,10 @@ Modes
 
 Tips
 ────────────────────────────
-• Type "/" to see command suggestions (Tab to autocomplete).
+• Type "/" to open the command menu: ↑/↓ browse every command, Enter runs the
+  highlighted one, Tab completes it into the line so you can add arguments.
+• While the agent is working, menu navigation still works and informational
+  commands (/help, /cost, /status, /context, /mode, …) run immediately.
 • Type /login to connect OpenAI, Anthropic, InferX, AgentRouter, ZenMux, TokenRouter, or OpenRouter with an interactive popup.
 • Type /models to pick a model from your connected provider.
 • Type /settings to open the settings menu (mode, verify, auto-commit, turns, budget).
