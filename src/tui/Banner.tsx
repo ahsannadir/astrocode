@@ -16,26 +16,34 @@ function rowColor(t: Theme, row: number): string {
 /**
  * Render the ASTROCODE wordmark. The header stars twinkle based on tick;
  * the tagline and version stay quiet so the glyph block stays the hero.
+ *
+ * `compact` drops the art block on short terminals: the 7-row banner cannot
+ * coexist with a tall popup on a 24-row screen, and the layout must never fill
+ * the terminal (see the headroom note in App.tsx).
  */
-export function Banner({ tick }: { tick: number }) {
+export function Banner({ tick, compact }: { tick: number; compact?: boolean }) {
   const star1 = starFrames[tick % starFrames.length];
   const star2 = starFrames[(tick + 2) % starFrames.length];
+  const header = (
+    <Box justifyContent="space-between" width="100%" paddingX={1}>
+      <Text>
+        <Text color={theme.star}>{star1}</Text>{' '}
+        <Text color={theme.ascii}>ASTROCODE</Text>{' '}
+        <Text color={theme.star}>{star2}</Text>
+      </Text>
+      <Text color={theme.muted}>v{VERSION}</Text>
+    </Box>
+  );
   return (
     <Box flexDirection="column" alignItems="center" marginBottom={0}>
-      <Box justifyContent="space-between" width="100%" paddingX={1}>
-        <Text>
-          <Text color={theme.star}>{star1}</Text>{' '}
-          <Text color={theme.ascii}>ASTROCODE</Text>{' '}
-          <Text color={theme.star}>{star2}</Text>
-        </Text>
-        <Text color={theme.muted}>v{VERSION}</Text>
-      </Box>
-      {ASCII_LINES.map((line, i) => (
-        <Text key={i} color={rowColor(theme, i)}>
-          {line}
-        </Text>
-      ))}
-      <Text color={theme.muted}>✦ AI TERMINAL CODING AGENT ✦</Text>
+      {header}
+      {!compact &&
+        ASCII_LINES.map((line, i) => (
+          <Text key={i} color={rowColor(theme, i)}>
+            {line}
+          </Text>
+        ))}
+      {!compact && <Text color={theme.muted}>✦ AI TERMINAL CODING AGENT ✦</Text>}
     </Box>
   );
 }

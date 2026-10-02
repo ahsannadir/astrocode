@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme } from './theme.js';
+import { scrollWindow } from './layout.js';
 import type { PlanMode } from '../types.js';
 import type { ApprovalMode } from '../approval.js';
 
 interface Props {
+  /**
+   * Row budget for the option list — the "↑/↓ n more…" notices come out of
+   * it, so the popup never outgrows its reservation (terminal-height aware).
+   */
+  maxRows?: number;
   mode: PlanMode;
   verify: boolean;
   autocommit: boolean;
@@ -43,6 +49,7 @@ const short = (s: string) => (s.length > 44 ? `${s.slice(0, 41)}…` : s);
  * highlighted row; changes apply immediately and persist on disk.
  */
 export function SettingsMenu({
+  maxRows,
   mode,
   verify,
   autocommit,
@@ -119,6 +126,12 @@ export function SettingsMenu({
   ];
 
   const [sel, setSel] = useState(0);
+  // Window the option list against the height budget, same as the model and
+  // theme pickers. A hardcoded full-height list was one of the ways a frame
+  // reached stdout.rows and tripped Ink's direct-write path on Esc.
+  const win = scrollWindow(rows.length, sel, maxRows ?? rows.length);
+  const { count, start, hasMoreUp, hasMoreDown } = win;
+  const visible = rows.slice(start, start + count);
 
   useInput(
     (input, key) => {
@@ -157,9 +170,11 @@ export function SettingsMenu({
       <Text color={theme.title} bold>
         ⚙ Settings
       </Text>
+      {hasMoreUp && <Text color={theme.muted}>↑ {start} more…</Text>}
       <Box flexDirection="column">
-        {rows.map((r, i) => {
-          const active = i === sel;
+        {visible.map((r, i) => {
+          const idx = start + i;
+          const active = idx === sel;
           const valueColor =
             r.kind === 'toggle'
               ? r.value === 'on'
@@ -185,6 +200,9 @@ export function SettingsMenu({
           );
         })}
       </Box>
+      {hasMoreDown && (
+        <Text color={theme.muted}>↓ {rows.length - start - count} more…</Text>
+      )}
       <Text color={theme.muted}>
         ↑↓ navigate · Enter/←/→ change · Esc close
       </Text>

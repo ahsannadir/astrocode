@@ -158,6 +158,11 @@ class Tui:
         if self.pid == 0:  # child
             os.environ["TERM"] = "xterm-256color"
             os.environ["NO_COLOR"] = "1"
+            # Isolate state: the /theme and /settings steps below persist to
+            # config.json, which must never touch the developer's real
+            # ~/.astrocode/config.json.
+            os.environ["ASTROCODE_CONFIG_DIR"] = "/tmp/astro_cfg_verify"
+            os.environ["ASTROCODE_SESSION_DIR"] = "/tmp/astro_sessions_verify"
             os.execvp("node", ["node", "dist/index.js", "--demo"])
         fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", ROWS, COLS, 0, 0))
         self.vt = Vt()
@@ -233,11 +238,17 @@ def main():
         if "❯ hello " not in s or "hello astro" in s:
             failures.append(f"DEL backspace wrong; tail:\n{s}")
 
-        # mid-line edit: ←← then DEL removes the 'o' in 'hello' → 'hell '
-        t.key("\x1b[D\x1b[D")
+        # Mid-line edit: the line is "hello as" with the caret at the end (index 8);
+        # two ← move it to 6, so DEL removes the space there → "helloas" (the
+        # delete follows the caret, not the end of the line). The arrows go in
+        # as separate writes because Ink parses a coalesced "\x1b[D\x1b[D" burst
+        # as ONE left-arrow press and drops the tail, which a real terminal
+        # never produces.
+        t.key("\x1b[D")
+        t.key("\x1b[D")
         t.key("\x7f")
         t.shot("04_midline_delete")
-        if "❯ hell " not in t.screen():
+        if "❯ helloas" not in t.screen():
             failures.append(f"mid-line backspace wrong:\n{t.screen()}")
 
         # ---- 4. paste burst (bracketed markers + newline) ----
@@ -246,6 +257,18 @@ def main():
         t.shot("05_pasted")
         if "paste me now please" not in t.screen():
             failures.append(f"paste text missing:\n{t.screen()}")
+
+        # ---- 4b. a long line must stay ONE row ----
+        # Ink switches to a direct-write path once a frame reaches the screen
+        # height, and the next identical frame then writes nothing: a box that
+        # wraps pushes the status bar off screen and freezes repaints. The
+        # prompt scrolls horizontally instead, so the last rows stay put.
+        t.key("\x15")
+        t.key("\x1b[200~" + "verylongdirectoryname/" * 20 + "\x1b[201~")
+        t.shot("05b_long_line")
+        tail = "\n".join(t.vt.lines()[-4:])
+        if "● ready" not in tail:
+            failures.append(f"long line overflowed the layout:\n{t.screen()}")
 
         # ---- 5. clear, then slash menu ----
         t.key("\x15")

@@ -38,8 +38,56 @@ async function readRegistry(cwd: string): Promise<Record<string, string>> {
 }
 
 async function writeRegistry(cwd: string, reg: Record<string, string>): Promise<void> {
-  await fs.mkdir(path.dirname(registryPath(cwd)), { recursive: true });
-  await fs.writeFile(registryPath(cwd), JSON.stringify(reg, null, 2), 'utf8');
+  const file = registryPath(cwd);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  // Write-then-rename: readers must never observe a half-written registry, and
+  // `JSON.parse` failing silently returns {} (see readRegistry), which would
+  // make every tracked worktree look like it had vanished.
+  const tmp = `${file}.${process.pid}.${Date.now().toString(36)}.tmp`;
+  try {
+    await fs.writeFile(tmp, JSON.stringify(reg, null, 2), 'utf8');
+    await fs.rename(tmp, file);
+  } catch (err) {
+    await fs.rm(tmp, { force: true });
+    throw err;
+  }
+}
+
+/**
+ * Serialises read-modify-write cycles on the registry, per `cwd`.
+ *
+ * Swarm mode creates one worktree per worker CONCURRENTLY. Each create used to
+ * read the whole registry, add its own entry, then write the entire file back.
+ * Two workers interleaving that cycle meant the second write landed WITHOUT
+ * the first worker's entry — a lost update — so the first worker's
+ * `mergeWorktree`/`discardWorktree` then reported `No worktree named "..."` and
+ * its work was silently dropped. That is an intermittent
+ * `tests/swarm.test.ts` failure: it never reproduced in isolation, only under
+ * CPU load, because that is the only thing that makes the interleaving
+ * likely. The lock is per-registry-path, so unrelated repos still run in
+ * parallel.
+ */
+const registryLocks = new Map<string, Promise<unknown>>();
+
+function withRegistry<T>(
+  cwd: string,
+  fn: (reg: Record<string, string>) => Promise<T> | T,
+): Promise<T> {
+  const file = registryPath(cwd);
+  const prev = registryLocks.get(file) ?? Promise.resolve();
+  const result = prev.then(async () => {
+    const reg = await readRegistry(cwd);
+    const value = await fn(reg);
+    await writeRegistry(cwd, reg);
+    return value;
+  });
+  // Keep the chain alive even if this link rejects, or one failure would
+  // deadlock every later operation on this registry.
+  registryLocks.set(
+    file,
+    result.catch(() => undefined),
+  );
+  return result;
 }
 
 function branchFor(name: string): string {
@@ -58,18 +106,30 @@ function findName(reg: Record<string, string>, name: string): string | null {
 }
 
 export async function createWorktree(cwd: string, name: string): Promise<ToolResult> {
-  const reg = await readRegistry(cwd);
   const branch = branchFor(name);
   const dir = dirFor(cwd, name);
-  if (reg[branch]) {
-    return { ok: false, text: `Worktree "${name}" already exists (${reg[branch]}). Use list or discard first.` };
+  // Reserve the slot under the lock, and do it BEFORE touching git so two
+  // concurrent creates of the same name cannot both win the check. The git
+  // call itself stays outside the lock — worktree creation is the slow part
+  // and there is no reason to serialise it across workers.
+  const reserved = await withRegistry(cwd, (reg) => {
+    if (reg[branch]) return null;
+    reg[branch] = dir;
+    return true;
+  });
+  if (!reserved) {
+    const existing = await readRegistry(cwd);
+    return { ok: false, text: `Worktree "${name}" already exists (${existing[branch]}). Use list or discard first.` };
   }
   const res = await runShell(`git worktree add "${dir}" -b "${branch}"`, { cwd });
   if (!res.ok) {
+    // Roll the reservation back, or the name stays permanently "taken" by a
+    // worktree that does not exist.
+    await withRegistry(cwd, (reg) => {
+      delete reg[branch];
+    });
     return { ok: false, text: `git worktree add failed:\n${res.text}` };
   }
-  reg[branch] = dir;
-  await writeRegistry(cwd, reg);
   return { ok: true, text: `Created worktree branch "${branch}" at ${dir}` };
 }
 
@@ -132,18 +192,20 @@ export async function listWorktrees(cwd: string): Promise<ToolResult> {
 }
 
 export async function discardWorktree(cwd: string, name: string): Promise<ToolResult> {
-  const reg = await readRegistry(cwd);
-  const key = findName(reg, name);
+  const key = await withRegistry(cwd, (reg) => findName(reg, name));
   if (!key) return { ok: false, text: `No worktree named "${name}". Use worktree create first.` };
-  const dir = reg[key];
+  const dir = (await readRegistry(cwd))[key];
   const remove = await runShell(`git worktree remove --force "${dir}"`, { cwd });
   if (!remove.ok) {
     return { ok: false, text: `git worktree remove failed:\n${remove.text}` };
   }
   // Remove the branch (the worktree has already been removed, so this is safe).
   const del = await runShell(`git branch -D "${key}"`, { cwd });
-  delete reg[key];
-  await writeRegistry(cwd, reg);
+  // Only drop the registry entry now that the worktree is really gone, and do
+  // it under the lock so a concurrent create isn't clobbered by our stale copy.
+  await withRegistry(cwd, (reg) => {
+    delete reg[key];
+  });
   return {
     ok: true,
     text: del.ok

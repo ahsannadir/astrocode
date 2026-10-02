@@ -68,3 +68,51 @@ test('worktree: unknown name gives a clear error', { skip: !hasGit }, async () =
   assert.ok(!r.ok);
   assert.ok(r.text.includes('No worktree named "nope"'));
 });
+
+test('worktree: concurrent creates do not clobber each other', { skip: !hasGit }, async () => {
+  // Swarm mode creates one worktree per worker at the SAME time. Each create
+  // used to read the whole registry, add its entry, and write the file back —
+  // so two interleaved creates lost one's entry and the loser later failed
+  // with `No worktree named ...`, silently dropping its work. The failure was
+  // load-dependent (it never reproduced in isolation), which is exactly why
+  // it needs a test that creates them all at once.
+  const names = ['par1', 'par2', 'par3', 'par4', 'par5', 'par6'];
+  const results = await Promise.all(names.map((n) => createWorktree(repo, n)));
+  for (let i = 0; i < names.length; i++) {
+    assert.ok(results[i].ok, `${names[i]}: ${results[i].text}`);
+  }
+  // Every single one must still be resolvable — that is what was being lost.
+  for (const n of names) {
+    const r = await runInWorktree(repo, n, 'echo hi');
+    assert.ok(r.ok, `${n} vanished from the registry: ${r.text}`);
+  }
+  // And the on-disk registry must be valid JSON, not a truncated write.
+  const raw = await fs.readFile(path.join(repo, '.astrocode', 'worktrees.json'), 'utf8');
+  const reg = JSON.parse(raw);
+  for (const n of names) assert.ok(reg[`astrocode/${n}`], `${n} missing from registry file`);
+
+  for (const n of names) {
+    const d = await discardWorktree(repo, n);
+    assert.ok(d.ok, `${n}: ${d.text}`);
+  }
+});
+
+test('worktree: a duplicate create is refused and the name is reusable after discard', { skip: !hasGit }, async () => {
+  // createWorktree reserves the name under the lock BEFORE running git so two
+  // concurrent creates cannot both win the check — and so the check and the
+  // insert are a single atomic step rather than two racing ones.
+  const name = 'dupe-check';
+  const first = await createWorktree(repo, name);
+  assert.ok(first.ok, first.text);
+  const dup = await createWorktree(repo, name);
+  assert.ok(!dup.ok, 'a second create of the same name must be refused');
+  assert.ok(dup.text.includes('already exists'), dup.text);
+
+  const d = await discardWorktree(repo, name);
+  assert.ok(d.ok, d.text);
+  // Discard released the reservation, so the name is free again.
+  const again = await createWorktree(repo, name);
+  assert.ok(again.ok, `name was not released after discard: ${again.text}`);
+  const d2 = await discardWorktree(repo, name);
+  assert.ok(d2.ok, d2.text);
+});
