@@ -25,6 +25,12 @@ interface Props {
   /** Called when the user presses Esc while the agent is busy (interrupt). */
   onAbort?: () => void;
   placeholder: string;
+  /**
+   * Cells available for the text area (everything outside the pane's border,
+   * padding and the ❯ marker). The input is clipped to it so the prompt box
+   * always stays exactly one row tall.
+   */
+  maxWidth?: number;
   /** Matching slash commands for the active "/" overlay (empty when not in slash mode). */
   slashMatches: SlashCommandDef[];
   /** Currently highlighted slash command index. */
@@ -71,6 +77,7 @@ export function PromptInput({
   busy = false,
   onAbort,
   placeholder,
+  maxWidth,
   slashMatches,
   slashSel,
   onSlashMove,
@@ -326,9 +333,24 @@ export function PromptInput({
     if (value === '') setHistIdx(null);
   }, [value]);
 
-  const before = value.slice(0, clamped);
-  const caretChar = value[clamped] ?? ' ';
-  const after = value.slice(clamped + 1);
+  // The input is always ONE row: a long value (a pasted command, a long path)
+  // scrolls horizontally to keep the caret visible instead of wrapping. A
+  // wrapping box grows past the height App reserved, which can push the whole
+  // frame onto Ink's direct-write path — the repaint stall behind all this.
+  const room = Math.max(8, maxWidth ?? 80);
+  // The caret is a cell of its own, so the window may start one past
+  // `length - room` and still fit: at the end of a long line the caret sits on
+  // the synthetic space after the last character.
+  const shift =
+    value.length > room
+      ? Math.min(Math.max(0, clamped - room + 1), value.length - room + 1)
+      : 0;
+  const view = value.slice(shift, shift + room);
+  const caretAt = clamped - shift;
+  const before = view.slice(0, caretAt);
+  const caretChar = view[caretAt] ?? ' ';
+  const after = view.slice(caretAt + 1);
+  const clip = (s: string) => (s.length > room ? s.slice(0, room) : s);
 
   return (
     <Box flexDirection="row">
@@ -338,14 +360,14 @@ export function PromptInput({
       <Text> </Text>
       {disabled ? (
         <Text color={theme.thinking} dimColor>
-          {value || placeholder}
+          {clip(value || placeholder)}
         </Text>
       ) : busy && value.length === 0 ? (
         <Text color={theme.thinking} dimColor>
-          type + Enter to queue · Esc interrupts the agent…
+          {clip('type + Enter to queue · Esc interrupts the agent…')}
         </Text>
       ) : value.length === 0 ? (
-        <Text dimColor>{placeholder}</Text>
+        <Text dimColor>{clip(placeholder)}</Text>
       ) : (
         <>
           <Text color={theme.prompt}>{before}</Text>

@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme } from './theme.js';
+import { scrollWindow } from './layout.js';
 import type { ProviderInfo } from '../providers.js';
 
 interface Props {
   provider: ProviderInfo;
   /** The currently active model (gets a ✓ marker). */
   current: string;
-  /** How many models fit on screen at once (terminal-height aware). */
+  /**
+   * Row budget for the list region — the "↑/↓ n more…" notices come out of
+   * it, so the popup never outgrows its reservation (terminal-height aware).
+   */
   maxRows: number;
   /** Called with the selected model id when the user confirms. */
   onSelect: (model: string) => void;
@@ -59,18 +63,12 @@ export function ModelsModal({ provider, current, maxRows, onSelect, onCancel }: 
   );
 
   // Scroll window: keep the selection centered within maxRows so long model
-  // lists (e.g. OpenRouter's free + paid set) stay fully navigable.
-  const count = Math.max(1, maxRows);
-  const start = Math.max(
-    0,
-    Math.min(
-      sel - Math.floor((count - 1) / 2),
-      Math.max(0, models.length - count),
-    ),
-  );
+  // lists (e.g. OpenRouter's free + paid set) stay fully navigable. maxRows
+  // covers the "↑/↓ n more…" notices too, so a trimmed list can never render
+  // taller than the height App reserved for this popup.
+  const win = scrollWindow(models.length, sel, maxRows);
+  const { count, start, hasMoreUp, hasMoreDown } = win;
   const visible = models.slice(start, start + count);
-  const hasMoreUp = start > 0;
-  const hasMoreDown = start + count < models.length;
 
   return (
     <Box borderStyle="double" borderColor={theme.promptSymbol} paddingX={1} flexDirection="column">

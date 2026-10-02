@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useStdout } from 'ink';
 import { theme } from './theme.js';
 
 /**
@@ -7,7 +7,8 @@ import { theme } from './theme.js';
  * decision. Keys: y = run once, a = always (this session, by prefix),
  * n/Esc = deny. The agent's loop is blocked until a decision lands — that's
  * the point: no shell command runs without the user seeing it first (in
- * 'dangerous' or 'all' approval modes).
+ * 'dangerous' or 'all' approval modes). Every row is truncated to the terminal
+ * width so the panel keeps the exact height App reserves for it.
  */
 export function ApprovalPrompt({
   command,
@@ -29,6 +30,12 @@ export function ApprovalPrompt({
   );
 
   const first = command.trim().split(/\s+/).slice(0, 2).join(' ');
+  // Keep this panel at the reserved APPROVAL_H: a long command (or a deep cwd)
+  // must be truncated, never wrapped, or the box grows past its rows.
+  const { stdout } = useStdout();
+  // marginX(2) + borders(2) + paddingX(2) + inner paddingX(2) + "$ "(2).
+  const room = Math.max(24, (stdout?.columns ?? 80) - 10);
+  const line = (s: string) => (s.length > room ? `${s.slice(0, room - 1)}…` : s);
 
   return (
     <Box borderStyle="round" borderColor={theme.plan} paddingX={1} flexDirection="column">
@@ -36,11 +43,11 @@ export function ApprovalPrompt({
         ⛔ Run command?
       </Text>
       <Box flexDirection="column" paddingX={2}>
-        <Text color={theme.prompt}>$ {command}</Text>
-        <Text dimColor>in {cwd}</Text>
+        <Text color={theme.prompt}>{line(`$ ${command}`)}</Text>
+        <Text dimColor>{line(`in ${cwd}`)}</Text>
       </Box>
       <Text color={theme.muted}>
-        y run once · a always allow "{first}" · n/Esc deny
+        {line(`y run once · a always allow "${first}" · n/Esc deny`)}
       </Text>
     </Box>
   );

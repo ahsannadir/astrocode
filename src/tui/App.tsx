@@ -56,11 +56,15 @@ interface Props {
   cwd: string;
 }
 
-const BANNER_H = 7; // header(1) + 5 logo rows + footer(1)
-const STATUS_H = 3; // bordered status bar: top border + content + bottom border
-const PROMPT_H = 4; // hint line(1) + bordered input box(3)
-const APPROVAL_H = 5; // bordered approval prompt: title + command + cwd + hint + borders
-const MIN_MESSAGE_H = 3; // keep at least one content line + breathing room
+// The frame-height budget lives in ./layout.ts so it can be unit-tested
+// without a terminal — Ink only sets the root node's WIDTH, so every row a
+// component spends is a row Ink counts, and `totalHeight < rows` is what
+// keeps the app off Ink's direct-write path.
+import {
+  computeLayout,
+  BANNER_H,
+  PROMPT_TEXT_INSET,
+} from './layout.js';
 
 // Cycle options for the /settings menu (module-level so they stay static).
 const TURN_OPTIONS = [5, 10, 20, 50, 100];
@@ -115,12 +119,6 @@ export function App({ config, cwd }: Props) {
   // run mid-turn), and it windows the FULL match list so "/" + ↑/↓ can reach
   // every command instead of just the first screenful.
   const slashNeedle = input.startsWith('/') ? input.slice(1) : null;
-  // Cap visible rows so the menu + layout never exceeds the terminal height.
-  // Available = rows - BANNER_H - STATUS_H - PROMPT_H - MIN_MESSAGE_H - 3(menu chrome)
-  const slashRowCap = Math.min(
-    8,
-    Math.max(3, rows - BANNER_H - STATUS_H - PROMPT_H - MIN_MESSAGE_H - 3),
-  );
   const slashMatches = useMemo(
     () => (slashNeedle === null ? [] : filterSlashCommands(slashNeedle)),
     [slashNeedle],
@@ -137,42 +135,59 @@ export function App({ config, cwd }: Props) {
     setSlashSel(0);
   }, [slashNeedle]);
 
-  // ---- layout: account for the slash menu so total never exceeds terminal ----
-  // SlashMenu = top-border(1) + visible items(N) + hint(1) + bottom-border(1)
-  const slashMenuH = slashActive ? Math.min(slashMatches.length, slashRowCap) + 3 : 0;
-  // Live task panel (only when there are todos). Title(1) + rows + borders(2),
-  // plus one "earlier tasks hidden" notice row when the list was trimmed.
+  // ---- layout: reserve every row so the frame never fills the screen ----
   const todos = listTodos();
-  const todoRows = Math.min(todos.length, 6);
-  const todoH = todos.length > 0 ? todoRows + 3 + (todos.length > 6 ? 1 : 0) : 0;
-
-  // Login modal: title(1)+subtitle(1)+items(PROVIDERS.length)+hint(1)+borders(2).
-  // Models modal: items(N)+title(1)+hint(1)+borders(2)+up to 2 "more" rows = N+6.
-  // Settings modal: title(1)+rows(7)+hint(1)+borders(2) = 11.
-  // Theme modal: title(1)+subtitle(1)+hint(1)+borders(2)+capped list rows.
-  const modelsCap = Math.max(
-    4,
-    rows - BANNER_H - STATUS_H - MIN_MESSAGE_H - todoH - 6,
-  );
-  const themeCap = Math.max(4, rows - BANNER_H - STATUS_H - MIN_MESSAGE_H - todoH - 5);
-  const modalH =
-    modal === 'login'
-      ? PROVIDERS.length + 5
-      : modal === 'models'
-        ? modelsCap + 6
-        : modal === 'settings'
-          ? 11
-          : modal === 'theme'
-            ? Math.min(THEME_NAMES.length, themeCap) + 5
-            : 0;
-  const promptH = modal !== null ? modalH : PROMPT_H;
-  // The approval prompt replaces the input box visually but still costs rows.
-  const approvalH = pendingApproval ? APPROVAL_H : 0;
-  const queueH = queue.length > 0 ? 1 : 0;
-  const messageHeight = Math.max(
-    MIN_MESSAGE_H,
-    rows - BANNER_H - STATUS_H - promptH - slashMenuH - todoH - approvalH - queueH,
-  );
+  const provider = providerById(providerId);
+  // Last overflowing frame height we warned about (-1 = none yet), so the
+  // tripwire below stays quiet across re-renders of the same overflowing frame.
+  const warnedOverflow = useRef(-1);
+  const layout = computeLayout({
+    rows,
+    modal,
+    slashActive,
+    slashMatches: slashMatches.length,
+    todoCount: todos.length,
+    approvalPending: pendingApproval !== null,
+    queueLength: queue.length,
+    modelsCount: provider.models.length,
+    themesCount: THEME_NAMES.length,
+    providersCount: PROVIDERS.length,
+  });
+  const {
+    bannerH,
+    todoMaxRows,
+    slashRowCap,
+    messageHeight,
+    modelsList,
+    themeList,
+    settingsList,
+    loginList,
+  } = layout;
+  // Draw the slash menu only when the budget reserved rows for it, so the
+  // rendered tree and the reservation can never disagree. A popup replaces
+  // the prompt and a pending approval blocks on a y/a/n decision — neither
+  // leaves room for the menu underneath.
+  const slashMenuVisible = slashActive && modal === null && pendingApproval === null;
+  // Runtime tripwire for the height budget. `tests/layout.test.ts` proves the
+  // invariant across the state space, but it can only test the states someone
+  // thought to enumerate — a new component or popup that renders taller than
+  // its reservation would sail past it. Ink takes a direct-write path whenever
+  // the frame reaches `stdout.rows`, and because that bypasses log-update's
+  // state, the NEXT identical frame emits zero bytes: the screen freezes on
+  // whatever was painted (the Esc-in-/settings freeze). Warn on stderr (Ink
+  // owns stdout, so this can't corrupt the frame) at most once per overflow
+  // signature so a per-render check stays quiet.
+  useEffect(() => {
+    if (layout.fits || warnedOverflow.current === layout.totalHeight) return;
+    warnedOverflow.current = layout.totalHeight;
+    console.error(
+      `[astrocode] frame height ${layout.totalHeight} >= terminal rows ${rows} ` +
+        `(modal=${modal ?? 'none'} slash=${slashActive} todos=${todos.length} ` +
+        `approval=${pendingApproval !== null} queue=${queue.length}). ` +
+        `Ink will direct-write and the next identical frame will not repaint. ` +
+        `Check src/tui/layout.ts against the render tree.`,
+    );
+  }, [layout, rows, modal, slashActive, pendingApproval, queue.length, todos.length]);
   const sel = Math.max(0, Math.min(slashSel, Math.max(0, slashMatches.length - 1)));
   const moveSlash = useCallback((dir: 1 | -1) => {
     setSlashSel((s) => {
@@ -1182,8 +1197,8 @@ export function App({ config, cwd }: Props) {
 
   return (
     <Box flexDirection="column">
-      <Box height={BANNER_H} flexDirection="column" justifyContent="flex-start">
-        <Banner tick={tick} />
+      <Box height={bannerH} flexDirection="column" justifyContent="flex-start">
+        <Banner tick={tick} compact={bannerH < BANNER_H} />
       </Box>
 
       <Box marginX={1} flexGrow={1}>
@@ -1212,9 +1227,13 @@ export function App({ config, cwd }: Props) {
 
       <Box marginX={1} marginBottom={0}>
         <Box flexDirection="column" width="100%">
-          {todos.length > 0 && <TodoPanel todos={todos} maxRows={6} width={width - 4} />}
-          {slashActive && (
-            <SlashMenu matches={slashMatches} sel={sel} width={width} maxRows={slashRowCap} />
+          {/* todoMaxRows is 0 when the panel couldn't be afforded at all. */}
+          {todoMaxRows > 0 && (
+            <TodoPanel todos={todos} maxRows={todoMaxRows} width={width - 4} />
+          )}
+          {slashMenuVisible && (
+            // width-2: this section sits inside the marginX={1} wrapper.
+            <SlashMenu matches={slashMatches} sel={sel} width={width - 2} maxRows={slashRowCap} />
           )}
           {queue.length > 0 && (
             <Box paddingX={1}>
@@ -1234,12 +1253,11 @@ export function App({ config, cwd }: Props) {
             <Box marginTop={1} paddingX={1}>
               <Text color={theme.promptSymbol}>⬚ select mode — ↑/↓ move · Enter copy · Esc cancel</Text>
             </Box>
-          ) : modal === null ? (
-            <Box
+          ) : modal === null ? (              <Box
               borderStyle="round"
               borderColor={mode === 'plan' ? theme.plan : theme.promptSymbol}
               paddingX={1}
-              marginTop={slashActive ? 1 : 0}
+              marginTop={slashMenuVisible ? 1 : 0}
             >
               <PromptInput
                 value={input}
@@ -1250,6 +1268,7 @@ export function App({ config, cwd }: Props) {
                 busy={busy}
                 onAbort={() => abortRef.current?.abort()}
                 placeholder="Ask AstroCode anything — / for commands"
+                maxWidth={width - PROMPT_TEXT_INSET}
                 slashMatches={slashActive ? slashMatches : []}
                 slashSel={sel}
                 onSlashMove={moveSlash}
@@ -1263,25 +1282,26 @@ export function App({ config, cwd }: Props) {
             <LoginModal
               onComplete={handleLoginComplete}
               onCancel={() => setModal(null)}
-              maxRows={PROVIDERS.length - 2}
+              maxRows={loginList.cap}
             />
           ) : modal === 'models' ? (
             <ModelsModal
               provider={providerById(providerId)}
               current={model}
-              maxRows={modelsCap}
+              maxRows={modelsList.cap}
               onSelect={handleModelSelect}
               onCancel={() => setModal(null)}
             />
           ) : modal === 'theme' ? (
             <ThemeModal
               current={themeName}
-              maxRows={themeCap}
+              maxRows={themeList.cap}
               onSelect={handleThemeSelect}
               onCancel={() => setModal(null)}
             />
           ) : (
             <SettingsMenu
+              maxRows={settingsList.cap}
               mode={mode}
               verify={configRef.current.verify}
               autocommit={configRef.current.autocommit}

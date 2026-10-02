@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme, THEMES, THEME_NAMES } from './theme.js';
+import { scrollWindow } from './layout.js';
 
 interface Props {
   /** The currently active theme name (gets a ✓ marker). */
   current: string;
-  /** How many rows fit on screen at once (terminal-height aware). */
+  /**
+   * Row budget for the list region — the "↑/↓ n more…" notices come out of
+   * it, so the modal never outgrows its reservation (terminal-height aware).
+   */
   maxRows?: number;
   /** Called with the chosen theme name when the user confirms. */
   onSelect: (name: string) => void;
@@ -54,19 +58,11 @@ export function ThemeModal({ current, maxRows, onSelect, onCancel }: Props) {
     { isActive: true },
   );
 
-  // Scroll window (same treatment as the models picker): keep the selection
-  // centered within maxRows so the modal never outgrows the terminal.
-  const count = Math.max(1, Math.min(maxRows ?? THEME_NAMES.length, THEME_NAMES.length));
-  const start = Math.max(
-    0,
-    Math.min(
-      sel - Math.floor((count - 1) / 2),
-      Math.max(0, THEME_NAMES.length - count),
-    ),
-  );
+  // Scroll window (same treatment as the models picker): maxRows covers the
+  // "↑/↓ n more…" notices too, so the modal never outgrows its reservation.
+  const win = scrollWindow(THEME_NAMES.length, sel, maxRows ?? THEME_NAMES.length);
+  const { count, start, hasMoreUp, hasMoreDown } = win;
   const visible = THEME_NAMES.slice(start, start + count);
-  const hasMoreUp = start > 0;
-  const hasMoreDown = start + count < THEME_NAMES.length;
 
   return (
     <Box borderStyle="double" borderColor={theme.promptSymbol} paddingX={1} flexDirection="column">

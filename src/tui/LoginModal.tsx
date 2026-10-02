@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme } from './theme.js';
+import { scrollWindow } from './layout.js';
 import { PROVIDERS } from '../providers.js';
 import { listModels } from '../ai/openai.js';
 import { backspaceAt, deleteWordBefore, insertAtCursor } from './inputEdit.js';
@@ -17,7 +18,10 @@ interface Props {
   onComplete: (providerId: string, apiKey: string, meta?: LoginMeta) => void;
   /** Called when the user cancels (Esc from the provider list). */
   onCancel: () => void;
-  /** How many model rows fit on screen at once (terminal-height aware). */
+  /**
+   * Row budget for the list regions — the "↑/↓ n more…" notices come out of
+   * it, so neither stage can outgrow the modal's reservation.
+   */
   maxRows?: number;
 }
 
@@ -241,6 +245,12 @@ export function LoginModal({ onComplete, onCancel, maxRows }: Props) {
   );
 
   if (stage === 'providers') {
+    // Same scroll window as the model list: maxRows is the whole row budget
+    // (notices included), so this stage can never render taller than the
+    // height App reserved for the modal.
+    const win = scrollWindow(PROVIDERS.length, sel, maxRows ?? PROVIDERS.length);
+    const { count, start, hasMoreUp, hasMoreDown } = win;
+    const visible = PROVIDERS.slice(start, start + count);
     return (
       <Box borderStyle="double" borderColor={theme.promptSymbol} paddingX={1} flexDirection="column">
         <Text color={theme.title} bold>
@@ -249,9 +259,10 @@ export function LoginModal({ onComplete, onCancel, maxRows }: Props) {
         <Text color={theme.muted} dimColor>
           Pick where your model lives — your API key is stored locally in ~/.astrocode/config.json.
         </Text>
+        {hasMoreUp && <Text color={theme.muted}>↑ {start} more…</Text>}
         <Box flexDirection="column">
-          {PROVIDERS.map((p, i) => {
-            const active = i === sel;
+          {visible.map((p, i) => {
+            const active = start + i === sel;
             return (
               <Box key={p.id} flexDirection="row">
                 <Text color={active ? theme.promptSymbol : theme.muted} bold={active}>
@@ -266,6 +277,9 @@ export function LoginModal({ onComplete, onCancel, maxRows }: Props) {
             );
           })}
         </Box>
+        {hasMoreDown && (
+          <Text color={theme.muted}>↓ {PROVIDERS.length - start - count} more…</Text>
+        )}
         <Text color={theme.muted}>↑↓ navigate · Enter select · Esc cancel</Text>
       </Box>
     );
@@ -303,17 +317,9 @@ export function LoginModal({ onComplete, onCancel, maxRows }: Props) {
   }
 
   if (stage === 'models') {
-    const count = Math.max(1, Math.min(maxRows ?? 8, modelRows.length));
-    const start = Math.max(
-      0,
-      Math.min(
-        modelSel - Math.floor((count - 1) / 2),
-        Math.max(0, modelRows.length - count),
-      ),
-    );
+    const win = scrollWindow(modelRows.length, modelSel, maxRows ?? 8);
+    const { count, start, hasMoreUp, hasMoreDown } = win;
     const visible = modelRows.slice(start, start + count);
-    const hasMoreUp = start > 0;
-    const hasMoreDown = start + count < modelRows.length;
     return (
       <Box borderStyle="double" borderColor={theme.promptSymbol} paddingX={1} flexDirection="column">
         <Text color={theme.title} bold>
