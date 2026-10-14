@@ -17,7 +17,7 @@ const EXPECTED_KEYS = [
   'system', 'error', 'toolName', 'toolOk', 'toolFail', 'muted', 'border',
   'status', 'prompt', 'promptSymbol', 'thinking', 'title', 'plan', 'heading',
   'bullet', 'code', 'synKeyword', 'synString', 'synNumber', 'synComment',
-  'synFunction', 'synType', 'synPunct', 'codeBorder',
+  'synFunction', 'synType', 'synPunct', 'synAdd', 'synDel', 'codeBorder',
 ];
 
 test('themes: registry has astro plus several palettes', () => {

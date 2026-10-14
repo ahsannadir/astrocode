@@ -33,12 +33,35 @@ test('syntax: detectLanguage maps aliases and degrades to plain', () => {
   assert.equal(detectLanguage('python'), 'python');
   assert.equal(detectLanguage('bash'), 'shell');
   assert.equal(detectLanguage('yml'), 'yaml');
-  assert.equal(detectLanguage('c++'), 'plain'); // no alias → plain, still colored
+  assert.equal(detectLanguage('cobol'), 'plain'); // no alias → plain, still colored
   assert.equal(detectLanguage('cpp'), 'c');
+  assert.equal(detectLanguage('c++'), 'c');
+  assert.equal(detectLanguage('objective-c'), 'c');
   assert.equal(detectLanguage(''), 'plain');
   assert.equal(detectLanguage(undefined), 'plain');
   assert.equal(detectLanguage('ts title="app.ts"'), 'js');
   assert.equal(detectLanguage('js:src/index.js'), 'js');
+  assert.equal(detectLanguage('language-js'), 'js');
+  assert.equal(detectLanguage('{python}'), 'python');
+});
+
+test('syntax: the modern language aliases all resolve', () => {
+  assert.equal(detectLanguage('swift'), 'swift');
+  assert.equal(detectLanguage('kt'), 'kotlin');
+  assert.equal(detectLanguage('scala'), 'scala');
+  assert.equal(detectLanguage('lua'), 'lua');
+  assert.equal(detectLanguage('dart'), 'dart');
+  assert.equal(detectLanguage('exs'), 'elixir');
+  assert.equal(detectLanguage('hs'), 'haskell');
+  assert.equal(detectLanguage('pl'), 'perl');
+  assert.equal(detectLanguage('r'), 'r');
+  assert.equal(detectLanguage('ps1'), 'powershell');
+  assert.equal(detectLanguage('makefile'), 'make');
+  assert.equal(detectLanguage('tf'), 'hcl');
+  assert.equal(detectLanguage('gql'), 'graphql');
+  assert.equal(detectLanguage('proto'), 'protobuf');
+  assert.equal(detectLanguage('patch'), 'diff');
+  assert.equal(detectLanguage('env'), 'env');
 });
 
 test('syntax: javascript keywords, numbers, strings and comments', () => {
@@ -131,6 +154,107 @@ test('syntax: shell keywords and variables', () => {
   const code = 'echo "$HOME" > out.txt';
   assert.ok(flat(code, 'shell').some((t) => t.kind === 'keyword' && t.text === 'echo'));
   assert.ok(flat(code, 'shell').some((t) => t.kind === 'string'));
+});
+
+test('syntax: shell sigils color variables outside quotes', () => {
+  const toks = flat('cp $SRC ${DEST_DIR}/x', 'shell');
+  assert.ok(toks.some((t) => t.kind === 'type' && t.text === '$SRC'));
+  assert.ok(toks.some((t) => t.kind === 'type' && t.text === '${DEST_DIR}'));
+});
+
+test('syntax: diff and patch blocks color hunks, adds and dels', () => {
+  const code = 'diff --git a/x b/x\nindex 1a2b..3c4d 100644\n--- a/x\n+++ b/x\n@@ -1,3 +1,4 @@\n context\n-removed\n+added';
+  const rows = highlightCode(code, 'diff');
+  assert.ok(rows[0].every((t) => t.kind === 'comment'), 'diff header is metadata');
+  assert.ok(rows[2].some((t) => t.kind === 'keyword' && t.text.startsWith('---')), 'old file marker');
+  assert.ok(rows[3].some((t) => t.kind === 'keyword' && t.text.startsWith('+++')), 'new file marker');
+  assert.ok(rows[4].every((t) => t.kind === 'type'), 'hunk header');
+  assert.ok(rows[6].every((t) => t.kind === 'del'), 'removed line');
+  assert.ok(rows[7].every((t) => t.kind === 'add'), 'added line');
+  assert.ok(rows[5].every((t) => t.kind === 'plain'), 'context line stays plain');
+});
+
+test('syntax: kotlin, swift, lua and dart keywords', () => {
+  assert.ok(
+    flat('fun greet(name: String) { val x = 1 }', 'kotlin').some(
+      (t) => t.kind === 'keyword' && t.text === 'fun',
+    ),
+  );
+  assert.ok(
+    flat('func greet() -> String { let x = 1 }', 'swift').some(
+      (t) => t.kind === 'keyword' && t.text === 'func',
+    ),
+  );
+  assert.ok(flat('local x = 1', 'lua').some((t) => t.kind === 'keyword' && t.text === 'local'));
+  assert.ok(
+    flat('void main() { final name = "x"; }', 'dart').some(
+      (t) => t.kind === 'keyword' && t.text === 'final',
+    ),
+  );
+});
+
+test('syntax: lua long comments beat the line-comment prefix', () => {
+  const rows = highlightCode('--[[ block\nstill block ]]\nlocal x = 1', 'lua');
+  assert.ok(rows[0].every((t) => t.kind === 'comment'));
+  assert.ok(rows[1].every((t) => t.kind === 'comment'));
+  assert.ok(rows[2].some((t) => t.kind === 'keyword' && t.text === 'local'));
+});
+
+test('syntax: powershell is case-insensitive and colors variables', () => {
+  const toks = flat('Get-ChildItem $env:Path', 'powershell');
+  assert.ok(toks.some((t) => t.kind === 'type' && t.text === '$env'));
+  const kw = flat('FUNCTION Foo { RETURN 1 }', 'powershell');
+  assert.ok(kw.some((t) => t.kind === 'keyword' && t.text === 'FUNCTION'));
+  assert.ok(kw.some((t) => t.kind === 'keyword' && t.text === 'RETURN'));
+});
+
+test('syntax: makefile targets, assignments and recipes', () => {
+  const rows = highlightCode('BIN = $(PWD)/out\nall: build\n\t$(CC) -o $(BIN) main.c', 'make');
+  assert.ok(rows[0].some((t) => t.kind === 'function' && t.text === 'BIN'));
+  assert.ok(rows[0].some((t) => t.kind === 'type' && t.text === '$(PWD)'));
+  assert.ok(rows[1].some((t) => t.kind === 'keyword' && t.text === 'all'));
+  assert.ok(rows[2].some((t) => t.kind === 'type' && t.text === '$(CC)'));
+});
+
+test('syntax: dotenv keys, values and trailing comments', () => {
+  const toks = flat('export API_KEY="sk-1" # note', 'env');
+  assert.ok(toks.some((t) => t.kind === 'keyword' && t.text.includes('export')));
+  assert.ok(toks.some((t) => t.kind === 'function' && t.text === 'API_KEY'));
+  assert.ok(toks.some((t) => t.kind === 'string' && t.text === '"sk-1"'));
+  assert.ok(toks.some((t) => t.kind === 'comment' && t.text === ' # note'));
+});
+
+test('syntax: hcl, graphql, elixir, haskell, r and protobuf get keywords', () => {
+  assert.ok(
+    flat('resource "aws_instance" "web" { ami = "x" }', 'hcl').some(
+      (t) => t.kind === 'keyword' && t.text === 'resource',
+    ),
+  );
+  assert.ok(
+    flat('type Query { user(id: ID!): User }', 'graphql').some(
+      (t) => t.kind === 'keyword' && t.text === 'type',
+    ),
+  );
+  assert.ok(
+    flat('defmodule App do\n  def run(), do: :ok\nend', 'elixir').some(
+      (t) => t.kind === 'keyword' && t.text === 'defmodule',
+    ),
+  );
+  const hs = flat('module Main where\nf x = x', 'haskell');
+  assert.ok(hs.some((t) => t.kind === 'keyword' && t.text === 'module'));
+  assert.ok(hs.some((t) => t.kind === 'keyword' && t.text === 'where'));
+  assert.ok(flat('x <- c(1, 2, 3)', 'r').some((t) => t.kind === 'type'));
+  assert.ok(
+    flat('message User { string name = 1; }', 'protobuf').some(
+      (t) => t.kind === 'keyword' && t.text === 'message',
+    ),
+  );
+});
+
+test('syntax: new languages keep one token row per source line', () => {
+  for (const lang of ['diff', 'env', 'make', 'kotlin', 'lua', 'graphql', 'powershell']) {
+    assert.equal(highlightCode('a\n\nb\n', lang).length, 4, lang);
+  }
 });
 
 test('syntax: css selector vs property', () => {

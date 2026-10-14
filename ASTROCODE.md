@@ -36,10 +36,17 @@ conventions, build commands, and anything the agent should always know here.
 - **Terminal rendering** (`src/tui/markdown.ts` + `src/tui/syntax.ts`): the
   assistant renderer. `richLines(text, width)` returns `UILine[]` — styled
   segments plus the plain `copy` text a selection pastes. Fenced code blocks
-  get a language label, a `│ ` gutter and per-token colors from the
-  dependency-free highlighter (`detectLanguage` + `highlightCode`, memoized by
-  language+source). Themes carry `syn*`/`codeBorder` roles and `themeRevision`
-  bumps on `setTheme()` to invalidate both caches. Keep these modules pure.
+  get a framed language label, a `│ ` gutter (`↪ ` for wrapped rows, copies
+  exclude both) and per-token colors from the dependency-free highlighter
+  (`detectLanguage` + `highlightCode`, memoized by language+source). Themes
+  carry `syn*`/`synAdd`/`synDel`/`codeBorder` roles and `themeRevision` bumps
+  on `setTheme()` to invalidate both caches. Keep these modules pure.
+- **Markdown invariants**: inline spans are parsed FIRST, then wrapped
+  (`wrapSegments`), so emphasis/code survive line breaks; all layout math uses
+  `displayWidth`/`sliceToWidth` (cells, not code units) so CJK/emoji wrap
+  correctly and hard-cuts never lose characters. Both ATX and setext headings,
+  list continuations, and diff fences (language `diff`/`patch` → add/del
+  tokens) are supported.
 - **Shell approval** (`src/approval.ts`): `run_command` consults an
   `ApprovalGate` from `ToolContext.approvalGate` when present. Modes
   off/dangerous/all; `y/a/n` TUI prompt (`src/tui/ApprovalPrompt.tsx`); the
@@ -92,4 +99,8 @@ conventions, build commands, and anything the agent should always know here.
   `tests/markdown.test.ts`; highlighter in `tests/syntax.test.ts`). Add new
   block types there rather than inline in a component, and give every
   non-chrome `UILine` a `copy` string so `/copy` and Ctrl+K selection stay
-  clean (code copies without its gutter; labels/rules set `copy: ''`).
+  clean (code copies without its gutter; frames/rules set `copy: ''`).
+- **New syntax languages land in the highlighter, not the renderer**: add a
+  `LangSpec` (keywords/builtins/sigils/comments/quotes) or a small scanner in
+  `src/tui/syntax.ts`, an alias in `ALIASES`, and a unit test; the markdown
+  side needs no changes.

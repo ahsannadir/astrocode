@@ -46,6 +46,9 @@ export interface Theme {
   synFunction: string;
   synType: string;
   synPunct: string;
+  /** Added / removed lines in diff and patch blocks. */
+  synAdd: string;
+  synDel: string;
   /** Gutter/label chrome for fenced code blocks. */
   codeBorder: string;
 }
@@ -81,6 +84,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'cyanBright',
     synType: 'blueBright',
     synPunct: 'white',
+    synAdd: 'greenBright',
+    synDel: 'redBright',
     codeBorder: 'gray',
   },
   ocean: {
@@ -113,6 +118,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'blueBright',
     synType: 'cyan',
     synPunct: 'white',
+    synAdd: 'greenBright',
+    synDel: 'redBright',
     codeBorder: 'blue',
   },
   sunset: {
@@ -145,6 +152,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'yellowBright',
     synType: 'magenta',
     synPunct: 'white',
+    synAdd: 'greenBright',
+    synDel: 'redBright',
     codeBorder: 'yellow',
   },
   forest: {
@@ -177,6 +186,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'cyanBright',
     synType: 'green',
     synPunct: 'white',
+    synAdd: 'greenBright',
+    synDel: 'redBright',
     codeBorder: 'green',
   },
   matrix: {
@@ -209,6 +220,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'greenBright',
     synType: 'green',
     synPunct: 'green',
+    synAdd: 'greenBright',
+    synDel: 'red',
     codeBorder: 'green',
   },
   aurora: {
@@ -242,6 +255,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'cyan',
     synType: 'blueBright',
     synPunct: 'white',
+    synAdd: 'greenBright',
+    synDel: 'redBright',
     codeBorder: 'cyan',
   },
   cyberpunk: {
@@ -275,6 +290,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'cyan',
     synType: 'magenta',
     synPunct: 'whiteBright',
+    synAdd: 'greenBright',
+    synDel: 'redBright',
     codeBorder: 'magentaBright',
   },
   dracula: {
@@ -308,6 +325,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'cyanBright',
     synType: 'cyan',
     synPunct: 'white',
+    synAdd: 'greenBright',
+    synDel: 'redBright',
     codeBorder: 'magenta',
   },
   inferno: {
@@ -341,6 +360,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'yellowBright',
     synType: 'red',
     synPunct: 'white',
+    synAdd: 'greenBright',
+    synDel: 'redBright',
     codeBorder: 'red',
   },
   nebula: {
@@ -374,6 +395,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'cyan',
     synType: 'magenta',
     synPunct: 'white',
+    synAdd: 'greenBright',
+    synDel: 'redBright',
     codeBorder: 'magenta',
   },
   noir: {
@@ -407,6 +430,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'whiteBright',
     synType: 'white',
     synPunct: 'gray',
+    synAdd: 'whiteBright',
+    synDel: 'red',
     codeBorder: 'gray',
   },
   synthwave: {
@@ -440,6 +465,8 @@ export const THEMES: Record<string, Theme> = {
     synFunction: 'cyan',
     synType: 'magenta',
     synPunct: 'white',
+    synAdd: 'greenBright',
+    synDel: 'redBright',
     codeBorder: 'magenta',
   },
 };

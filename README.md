@@ -253,14 +253,19 @@ that burns its budget without answering gets one final tool-less call to write
 its report.
 
 **The TUI.** A twinkling ASCII banner, streaming replies rendered as real
-markdown — headings, lists, tables, and fenced code blocks with syntax
-highlighting for a dozen-plus languages — plus a live status bar (mode, model,
-context %, tasks, spend, branch, cwd), a task panel the agent keeps updated via
-the `todo` tool, and real modals for `/login`, `/models`, `/settings`, and
-`/theme`. Twelve color themes, each with its own syntax palette. Your terminal's
-native mouse selection works, and `Ctrl+K` copies clean text without banners or
-prefixes; `/copy` grabs the last reply. If stdout isn't a TTY (CI, a pipe), it
-prints a banner and exits instead of crashing.
+markdown — headings, nested emphasis, links, images, task lists, tables and
+framed fenced code blocks with syntax highlighting for ~30 languages. Code
+fences understand diff/patch (`+`/`-`/hunk headers get their own colors), and
+inline spans are parsed before wrapping so bold/code that crosses a line break
+keeps its styling instead of leaking `**` markers. Layout is measured in
+terminal cells, so CJK text and emoji wrap where they should. On top of that a
+live status bar (mode, model, context %, tasks, spend, branch, cwd), a task
+panel the agent keeps updated via the `todo` tool, and real modals for
+`/login`, `/models`, `/settings`, and `/theme`. Twelve color themes, each with
+its own syntax palette. Your terminal's native mouse selection works, and
+`Ctrl+K` copies clean text without banners or prefixes; `/copy` grabs the last
+reply. If stdout isn't a TTY (CI, a pipe), it prints a banner and exits instead
+of crashing.
 
 ## Configuration
 

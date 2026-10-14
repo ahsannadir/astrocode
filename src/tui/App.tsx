@@ -1214,7 +1214,10 @@ export function App({ config, cwd }: Props) {
           <MessageArea
             items={items}
             height={messageHeight - 2}
-            width={width - 2} // pane padding (paddingX=1 both sides)
+            // marginX + border are 1 column per side; MessageArea subtracts
+            // paddingX itself. Keep this exact or full-width markdown rules
+            // (code frames, tables) wrap inside the box and shift the pane.
+            width={width - 4}
             thinking={busy}
             scrollEnabled={!busy && input.length === 0}
             tick={tick}

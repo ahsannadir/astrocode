@@ -20,7 +20,11 @@ export type TokenKind =
   | 'comment'
   | 'function'
   | 'type'
-  | 'punct';
+  | 'punct'
+  /** Diff/patch added lines. */
+  | 'add'
+  /** Diff/patch removed lines. */
+  | 'del';
 
 export interface Token {
   text: string;
@@ -62,7 +66,15 @@ interface LangSpec {
   lifetimes?: boolean;
   /** Keyword match is case-insensitive (SQL). */
   caseInsensitive?: boolean;
+  /** Sigils whose ident run is colored as a type (`$HOME`, Perl `@list`). */
+  sigils?: readonly string[];
 }
+
+/**
+ * Canonical diff hunk/file metadata lines. Kept in one place so the diff
+ * scanner and its tests agree on what counts as chrome vs content.
+ */
+const DIFF_META_RE = /^(?:diff --git |index |new file|deleted file|old mode|new mode|similarity |rename |copy |dissimilarity |Binary files |\\)/;
 
 function set(words: string): ReadonlySet<string> {
   return new Set(words.split(/\s+/).filter(Boolean));
@@ -228,6 +240,141 @@ const SH_BUILTINS = set(`
   wc wget which whoami xargs
 `);
 
+const SWIFT_KEYWORDS = set(`
+  associatedtype class deinit enum extension fileprivate func import init inout
+  internal let open operator precedencegroup protocol public rethrows static
+  struct subscript typealias var break case continue default defer do else
+  fallthrough for guard if in repeat return switch where while as catch false
+  is nil super self Self throw throws true try
+`);
+
+const SWIFT_BUILTINS = set(`
+  Any AnyObject Array Bool Character Data Dictionary Double Error Float Int Int8
+  Int16 Int32 Int64 Optional Result Set String UInt UInt8 UInt16 UInt32 UInt64
+  URL Void print abs min max map compactMap flatMap filter reduce
+`);
+
+const KOTLIN_KEYWORDS = set(`
+  abstract actual annotation as break by catch class companion const constructor
+  continue crossinline data delegate do dynamic else enum expect external field
+  finally for fun get if import in infix init inline inner interface internal is
+  lateinit noinline object open operator out override package private protected
+  public reified return sealed set super suspend tailrec this throw try
+  typealias val var vararg when where while true false null
+`);
+
+const KOTLIN_BUILTINS = set(`
+  Any Boolean Byte Char Double Float Int Long Nothing Short String Unit Array
+  List MutableList Map MutableMap Set MutableSet Pair Triple println print
+`);
+
+const SCALA_KEYWORDS = set(`
+  abstract case catch class def do else extends false final finally for forSome
+  given using enum export if implicit import lazy match new null object override
+  package private protected return sealed super this throw trait true try type
+  val var while with yield
+`);
+
+const SCALA_BUILTINS = set(`
+  Any AnyRef AnyVal Boolean Byte Char Double Float Int Long Nothing Null Short
+  String Unit List Map Set Seq Option Some None Vector Either Left Right println
+`);
+
+const LUA_KEYWORDS = set(`
+  and break do else elseif end false for function goto if in local nil not or
+  repeat return then true until while
+`);
+
+const LUA_BUILTINS = set(`
+  assert collectgarbage dofile error getmetatable ipairs load next pairs pcall
+  print rawequal rawget rawlen rawset require select setmetatable tonumber
+  tostring type xpcall string table math io os coroutine utf8
+`);
+
+const DART_KEYWORDS = set(`
+  abstract as assert async await break case catch class const continue covariant
+  default deferred do dynamic else enum export extends extension external
+  factory false final finally for Function get hide if implements import in
+  interface is late library mixin new null on operator part required rethrow
+  return set show static super switch sync this throw true try typedef var void
+  while with yield
+`);
+
+const DART_BUILTINS = set(`
+  bool double int num String List Map Set Future Stream Object Duration DateTime
+  Iterable print
+`);
+
+const ELIXIR_KEYWORDS = set(`
+  def defmodule defp defs defstruct defmacro defguard defimpl defdelegate do end
+  fn when cond case if unless else true false nil and or not in alias import
+  require use raise rescue try catch after receive send spawn
+`);
+
+const ELIXIR_BUILTINS = set(`
+  IO Enum String List Map Keyword Kernel Agent GenServer Task Supervisor
+  Process Integer Float Atom Tuple Regex
+`);
+
+const HASKELL_KEYWORDS = set(`
+  case class data default deriving do else foreign if import in infix infixl
+  infixr instance let module newtype of then type where forall mdo
+`);
+
+const HASKELL_BUILTINS = set(`
+  Bool Char Double Either False Float Int Integer IO Just Left Maybe Nothing
+  Right String True Show Read Eq Ord Enum map filter foldl foldr fmap pure
+  putStrLn print return
+`);
+
+const PERL_KEYWORDS = set(`
+  my our local sub package use require return if elsif else unless while for
+  foreach until do last next redo goto die warn print say defined undef and or
+  not eq ne lt gt le ge cmp
+`);
+
+const PERL_BUILTINS = set(`
+  chomp chop split join push pop shift unshift keys values each sort reverse
+  grep map scalar sprintf printf open close
+`);
+
+const R_KEYWORDS = set(`
+  if else repeat while function for in next break TRUE FALSE NULL Inf NaN NA
+  library require
+`);
+
+const R_BUILTINS = set(`
+  c list vector matrix data.frame mean median sd sum min max length print paste
+  seq rep plot factor table names
+`);
+
+const POWERSHELL_KEYWORDS = set(`
+  function param if else elseif switch foreach for while do until break continue
+  return try catch finally throw trap begin process end filter in class enum
+  using
+`);
+
+const POWERSHELL_BUILTINS = set(`
+  Write-Host Write-Output Get-ChildItem Get-Content Set-Content Select-Object
+  Where-Object ForEach-Object Test-Path New-Item Remove-Item Copy-Item
+  Move-Item Start-Process Join-Path Split-Path
+`);
+
+const HCL_KEYWORDS = set(`
+  resource data variable output module provider locals terraform for_each count
+  depends_on lifecycle dynamic true false null
+`);
+
+const GRAPHQL_KEYWORDS = set(`
+  type query mutation subscription schema scalar interface union enum input
+  fragment on extend directive implements
+`);
+
+const PROTOBUF_KEYWORDS = set(`
+  syntax message enum service rpc package import option repeated optional
+  required oneof map reserved returns stream
+`);
+
 const SPECS: Record<string, LangSpec> = {
   js: {
     keywords: JS_KEYWORDS,
@@ -316,6 +463,7 @@ const SPECS: Record<string, LangSpec> = {
     builtins: SH_BUILTINS,
     lineComments: ['#'],
     quotes: ['"', "'"],
+    sigils: ['$'],
   },
   docker: {
     keywords: set(
@@ -323,6 +471,98 @@ const SPECS: Record<string, LangSpec> = {
         'user workdir arg onbuild stopsignal healthcheck shell as',
     ),
     lineComments: ['#'],
+    quotes: ['"', "'"],
+  },
+  swift: {
+    keywords: SWIFT_KEYWORDS,
+    builtins: SWIFT_BUILTINS,
+    lineComments: ['//'],
+    blockComment: ['/*', '*/'],
+    quotes: ['"'],
+    decorators: true,
+  },
+  kotlin: {
+    keywords: KOTLIN_KEYWORDS,
+    builtins: KOTLIN_BUILTINS,
+    lineComments: ['//'],
+    blockComment: ['/*', '*/'],
+    quotes: ['"', "'"],
+    decorators: true,
+  },
+  scala: {
+    keywords: SCALA_KEYWORDS,
+    builtins: SCALA_BUILTINS,
+    lineComments: ['//'],
+    blockComment: ['/*', '*/'],
+    quotes: ['"', "'"],
+    decorators: true,
+  },
+  lua: {
+    keywords: LUA_KEYWORDS,
+    builtins: LUA_BUILTINS,
+    lineComments: ['--'],
+    blockComment: ['--[[', ']]'],
+    quotes: ['"', "'"],
+  },
+  dart: {
+    keywords: DART_KEYWORDS,
+    builtins: DART_BUILTINS,
+    lineComments: ['//'],
+    blockComment: ['/*', '*/'],
+    quotes: ['"', "'"],
+    decorators: true,
+  },
+  elixir: {
+    keywords: ELIXIR_KEYWORDS,
+    builtins: ELIXIR_BUILTINS,
+    lineComments: ['#'],
+    quotes: ['"', "'"],
+    decorators: true,
+  },
+  haskell: {
+    keywords: HASKELL_KEYWORDS,
+    builtins: HASKELL_BUILTINS,
+    lineComments: ['--'],
+    blockComment: ['{-', '-}'],
+    quotes: ['"', "'"],
+  },
+  perl: {
+    keywords: PERL_KEYWORDS,
+    builtins: PERL_BUILTINS,
+    lineComments: ['#'],
+    quotes: ['"', "'"],
+    sigils: ['$', '@', '%'],
+  },
+  r: {
+    keywords: R_KEYWORDS,
+    builtins: R_BUILTINS,
+    lineComments: ['#'],
+    quotes: ['"', "'"],
+  },
+  powershell: {
+    keywords: POWERSHELL_KEYWORDS,
+    builtins: POWERSHELL_BUILTINS,
+    lineComments: ['#'],
+    blockComment: ['<#', '#>'],
+    quotes: ['"', "'"],
+    caseInsensitive: true,
+    sigils: ['$'],
+  },
+  hcl: {
+    keywords: HCL_KEYWORDS,
+    lineComments: ['#', '//'],
+    blockComment: ['/*', '*/'],
+    quotes: ['"'],
+  },
+  graphql: {
+    keywords: GRAPHQL_KEYWORDS,
+    lineComments: ['#'],
+    quotes: ['"'],
+  },
+  protobuf: {
+    keywords: PROTOBUF_KEYWORDS,
+    lineComments: ['//'],
+    blockComment: ['/*', '*/'],
     quotes: ['"', "'"],
   },
   plain: {
@@ -346,6 +586,7 @@ const ALIASES: Record<string, string> = {
   rs: 'rust', rust: 'rust',
   java: 'java',
   c: 'c', h: 'c', cc: 'c', cpp: 'c', cxx: 'c', hpp: 'c', hh: 'c',
+  'c++': 'c', cplusplus: 'c', m: 'c', mm: 'c', objc: 'c', 'objective-c': 'c',
   cs: 'csharp', csharp: 'csharp', 'c#': 'csharp',
   rb: 'ruby', ruby: 'ruby',
   php: 'php',
@@ -353,23 +594,44 @@ const ALIASES: Record<string, string> = {
   sh: 'shell', bash: 'shell', zsh: 'shell', shell: 'shell', console: 'shell',
   fish: 'shell', ksh: 'shell',
   docker: 'docker', dockerfile: 'docker', containerfile: 'docker',
+  swift: 'swift',
+  kotlin: 'kotlin', kt: 'kotlin', kts: 'kotlin',
+  scala: 'scala', sc: 'scala',
+  lua: 'lua',
+  dart: 'dart',
+  ex: 'elixir', exs: 'elixir', elixir: 'elixir',
+  hs: 'haskell', lhs: 'haskell', haskell: 'haskell',
+  pl: 'perl', pm: 'perl', perl: 'perl',
+  r: 'r', rscript: 'r', rstats: 'r',
+  ps1: 'powershell', psm1: 'powershell', pwsh: 'powershell',
+  powershell: 'powershell',
+  make: 'make', makefile: 'make', mk: 'make', mkfile: 'make', gnumake: 'make',
+  hcl: 'hcl', tf: 'hcl', tfvars: 'hcl', terraform: 'hcl',
+  graphql: 'graphql', gql: 'graphql',
+  proto: 'protobuf', protobuf: 'protobuf',
+  diff: 'diff', patch: 'diff',
+  env: 'env', dotenv: 'env',
   html: 'markup', htm: 'markup', xml: 'markup', svg: 'markup', vue: 'markup',
   xhtml: 'markup', rss: 'markup',
   css: 'css', scss: 'css', sass: 'css', less: 'css',
   yaml: 'yaml', yml: 'yaml',
   toml: 'toml', ini: 'toml', cfg: 'toml', conf: 'toml', properties: 'toml',
   md: 'markdown', markdown: 'markdown', mdx: 'markdown',
-  txt: 'plain', text: 'plain', plaintext: 'plain', log: 'plain', diff: 'plain',
+  txt: 'plain', text: 'plain', plaintext: 'plain', log: 'plain',
+  output: 'plain', diffstat: 'plain',
 };
 
 /**
  * Map a fenced-code info string to a strategy key. The first token of the
- * info string is the language (` ```ts title="x" ` → `ts`); unknown or empty
- * input degrades to `plain`, which still colors strings/numbers/comments.
+ * info string is the language (` ```ts title="x" ` → `ts`); `language-js` and
+ * `{js}` styles are accepted too. Unknown or empty input degrades to `plain`,
+ * which still colors strings/numbers/comments.
  */
 export function detectLanguage(info?: string | null): string {
   if (!info) return 'plain';
-  const first = info.trim().split(/[\s:{,]+/)[0]?.toLowerCase() ?? '';
+  const trimmed = info.trim().replace(/^\{\s*/, '').replace(/\s*\}$/, '');
+  const raw = trimmed.split(/[\s:{,]+/)[0]?.toLowerCase() ?? '';
+  const first = raw.replace(/^language-/, '');
   return ALIASES[first] ?? 'plain';
 }
 
@@ -471,12 +733,8 @@ function scanClikeLine(
       continue;
     }
 
-    const lc = spec.lineComments.find((c) => line.startsWith(c, i));
-    if (lc) {
-      push(line.slice(i), 'comment');
-      return out;
-    }
-
+    // Block comments are checked before line comments: `--[[` (Lua) and
+    // `<#` (PowerShell) start with a line-comment prefix.
     if (spec.blockComment && line.startsWith(spec.blockComment[0], i)) {
       const open = spec.blockComment[0];
       const close = spec.blockComment[1];
@@ -489,6 +747,12 @@ function scanClikeLine(
       push(line.slice(i, end + close.length), 'comment');
       i = end + close.length;
       continue;
+    }
+
+    const lc = spec.lineComments.find((c) => line.startsWith(c, i));
+    if (lc) {
+      push(line.slice(i), 'comment');
+      return out;
     }
 
     if (spec.tripleQuotes) {
@@ -553,6 +817,25 @@ function scanClikeLine(
       if (m && m.index === i && m[0].length > 0) {
         push(m[0], 'number');
         i += m[0].length;
+        continue;
+      }
+    }
+
+    // Sigiled identifier: shell/PowerShell `$HOME`, Perl `@list`, `${var}`.
+    if (spec.sigils?.includes(ch)) {
+      const nxt = line[i + 1] ?? '';
+      if (nxt === '{') {
+        const end = line.indexOf('}', i + 2);
+        const stop = end === -1 ? n : end + 1;
+        push(line.slice(i, stop), 'type');
+        i = stop;
+        continue;
+      }
+      if (IDENT_START.test(nxt)) {
+        let j = i + 1;
+        while (j < n && IDENT_PART.test(line[j])) j++;
+        push(line.slice(i, j), 'type');
+        i = j;
         continue;
       }
     }
@@ -964,6 +1247,118 @@ function scanMarkdownLine(line: string): Token[] {
 }
 
 /* ------------------------------------------------------------------ *
+ * Diff / patch
+ * ------------------------------------------------------------------ */
+
+function scanDiffLine(line: string): Token[] {
+  if (line.startsWith('@@')) return [{ text: line, kind: 'type' }];
+  if (DIFF_META_RE.test(line)) return [{ text: line, kind: 'comment' }];
+  // `+++`/`---` file markers before the single-char add/del branches.
+  if (line.startsWith('+++') || line.startsWith('---')) {
+    return [{ text: line, kind: 'keyword' }];
+  }
+  if (line.startsWith('+')) return [{ text: line, kind: 'add' }];
+  if (line.startsWith('-')) return [{ text: line, kind: 'del' }];
+  return [{ text: line, kind: 'plain' }];
+}
+
+/* ------------------------------------------------------------------ *
+ * dotenv (.env files)
+ * ------------------------------------------------------------------ */
+
+function scanEnvLine(line: string): Token[] {
+  const out: Token[] = [];
+  const push = (text: string, kind: TokenKind) => {
+    if (text) out.push({ text, kind });
+  };
+  const body = line.trimStart();
+  const lead = line.slice(0, line.length - body.length);
+  if (lead) push(lead, 'plain');
+  if (body.startsWith('#')) {
+    push(body, 'comment');
+    return out;
+  }
+  const m = /^(export\s+)?([A-Za-z_][A-Za-z0-9_.]*)(\s*=\s*)(.*)$/.exec(body);
+  if (!m) {
+    push(body, 'plain');
+    return out;
+  }
+  push(m[1] ?? '', 'keyword');
+  push(m[2], 'function');
+  push(m[3], 'punct');
+  const rest = m[4];
+  // A `#` after whitespace starts a trailing comment; `#` mid-value does not.
+  const cut = rest.search(/\s#/);
+  const value = cut === -1 ? rest : rest.slice(0, cut);
+  const trail = cut === -1 ? '' : rest.slice(cut);
+  push(value, /^['"]/.test(value) ? 'string' : 'plain');
+  push(trail, 'comment');
+  return out;
+}
+
+/* ------------------------------------------------------------------ *
+ * Makefile
+ * ------------------------------------------------------------------ */
+
+/** Color `$(VAR)`, `${VAR}` and `$@`-style automatic variables as types. */
+function pushMakeVars(text: string, out: Token[]): void {
+  if (!text) return;
+  const re = /\$\([^)]*\)|\$\{[^}]*\}|\$[@<^?*]/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index), kind: 'plain' });
+    out.push({ text: m[0], kind: 'type' });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), kind: 'plain' });
+}
+
+function scanMakeLine(line: string): Token[] {
+  const out: Token[] = [];
+  const push = (text: string, kind: TokenKind) => {
+    if (text) out.push({ text, kind });
+  };
+  if (/^\s*#/.test(line)) {
+    push(line, 'comment');
+    return out;
+  }
+  if (line.startsWith('\t')) {
+    push('\t', 'plain');
+    const body = line.slice(1);
+    const m = /^(\s*)([@+-]?)([A-Za-z0-9_./+-]+)/.exec(body);
+    if (!m) {
+      // Recipe starting with a variable, e.g. `$(CC) -o out main.c`.
+      pushMakeVars(body, out);
+      return out;
+    }
+    push(m[1], 'plain');
+    push(m[2], 'punct');
+    push(m[3], 'function');
+    pushMakeVars(body.slice(m[0].length), out);
+    return out;
+  }
+  const assign = /^(\s*)([A-Za-z0-9_.-]+)(\s*[:+?]?=\s*)(.*)$/.exec(line);
+  if (assign) {
+    push(assign[1], 'plain');
+    push(assign[2], 'function');
+    push(assign[3], 'punct');
+    pushMakeVars(assign[4], out);
+    return out;
+  }
+  const target = /^(\s*)([A-Za-z0-9_./%$][A-Za-z0-9_./%$-]*)(\s*:\s*)(.*)$/.exec(line);
+  if (target) {
+    push(target[1], 'plain');
+    push(target[2], 'keyword');
+    push(target[3], 'punct');
+    pushMakeVars(target[4], out);
+    return out;
+  }
+  pushMakeVars(line, out);
+  return out;
+}
+
+/* ------------------------------------------------------------------ *
  * Public entry point
  * ------------------------------------------------------------------ */
 
@@ -979,6 +1374,12 @@ function scanLine(line: string, lang: string, st: HighlightState): Token[] {
       return scanTomlLine(line);
     case 'markdown':
       return scanMarkdownLine(line);
+    case 'diff':
+      return scanDiffLine(line);
+    case 'env':
+      return scanEnvLine(line);
+    case 'make':
+      return scanMakeLine(line);
     default:
       return scanClikeLine(line, st, SPECS[lang] ?? SPECS.plain);
   }
