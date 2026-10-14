@@ -37,6 +37,17 @@ export interface Theme {
   heading: string;
   bullet: string;
   code: string;
+  // Syntax highlighting roles (see src/tui/syntax.ts). Kept to named Ink
+  // colors so validThemeColors() and every palette stay honest.
+  synKeyword: string;
+  synString: string;
+  synNumber: string;
+  synComment: string;
+  synFunction: string;
+  synType: string;
+  synPunct: string;
+  /** Gutter/label chrome for fenced code blocks. */
+  codeBorder: string;
 }
 
 export const THEMES: Record<string, Theme> = {
@@ -63,6 +74,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'cyanBright',
     bullet: 'yellow',
     code: 'greenBright',
+    synKeyword: 'magentaBright',
+    synString: 'greenBright',
+    synNumber: 'yellowBright',
+    synComment: 'gray',
+    synFunction: 'cyanBright',
+    synType: 'blueBright',
+    synPunct: 'white',
+    codeBorder: 'gray',
   },
   ocean: {
     ascii: 'blue',
@@ -87,6 +106,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'blueBright',
     bullet: 'yellow',
     code: 'greenBright',
+    synKeyword: 'cyanBright',
+    synString: 'greenBright',
+    synNumber: 'yellowBright',
+    synComment: 'gray',
+    synFunction: 'blueBright',
+    synType: 'cyan',
+    synPunct: 'white',
+    codeBorder: 'blue',
   },
   sunset: {
     ascii: 'yellow',
@@ -111,6 +138,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'yellowBright',
     bullet: 'yellow',
     code: 'greenBright',
+    synKeyword: 'magentaBright',
+    synString: 'greenBright',
+    synNumber: 'yellowBright',
+    synComment: 'gray',
+    synFunction: 'yellowBright',
+    synType: 'magenta',
+    synPunct: 'white',
+    codeBorder: 'yellow',
   },
   forest: {
     ascii: 'green',
@@ -135,6 +170,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'greenBright',
     bullet: 'yellow',
     code: 'greenBright',
+    synKeyword: 'greenBright',
+    synString: 'yellowBright',
+    synNumber: 'cyanBright',
+    synComment: 'gray',
+    synFunction: 'cyanBright',
+    synType: 'green',
+    synPunct: 'white',
+    codeBorder: 'green',
   },
   matrix: {
     ascii: 'green',
@@ -159,6 +202,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'green',
     bullet: 'green',
     code: 'greenBright',
+    synKeyword: 'greenBright',
+    synString: 'green',
+    synNumber: 'greenBright',
+    synComment: 'gray',
+    synFunction: 'greenBright',
+    synType: 'green',
+    synPunct: 'green',
+    codeBorder: 'green',
   },
   aurora: {
     // Northern lights: teal sky, green flash, blue depths.
@@ -184,6 +235,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'greenBright',
     bullet: 'cyanBright',
     code: 'greenBright',
+    synKeyword: 'greenBright',
+    synString: 'cyanBright',
+    synNumber: 'yellowBright',
+    synComment: 'gray',
+    synFunction: 'cyan',
+    synType: 'blueBright',
+    synPunct: 'white',
+    codeBorder: 'cyan',
   },
   cyberpunk: {
     // Neon voltage: hot magenta, electric cyan, acid yellow.
@@ -209,6 +268,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'cyanBright',
     bullet: 'magentaBright',
     code: 'yellowBright',
+    synKeyword: 'magentaBright',
+    synString: 'cyanBright',
+    synNumber: 'yellowBright',
+    synComment: 'gray',
+    synFunction: 'cyan',
+    synType: 'magenta',
+    synPunct: 'whiteBright',
+    codeBorder: 'magentaBright',
   },
   dracula: {
     // The beloved palette: purple, pink, green, and cyan on night black.
@@ -234,6 +301,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'cyanBright',
     bullet: 'magentaBright',
     code: 'greenBright',
+    synKeyword: 'magentaBright',
+    synString: 'greenBright',
+    synNumber: 'yellowBright',
+    synComment: 'gray',
+    synFunction: 'cyanBright',
+    synType: 'cyan',
+    synPunct: 'white',
+    codeBorder: 'magenta',
   },
   inferno: {
     // Ember & flame: red heat with a yellow core.
@@ -259,6 +334,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'yellowBright',
     bullet: 'yellow',
     code: 'yellowBright',
+    synKeyword: 'yellowBright',
+    synString: 'redBright',
+    synNumber: 'yellow',
+    synComment: 'gray',
+    synFunction: 'yellowBright',
+    synType: 'red',
+    synPunct: 'white',
+    codeBorder: 'red',
   },
   nebula: {
     // Deep space: violet dust clouds and blue starlight.
@@ -284,6 +367,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'cyanBright',
     bullet: 'magentaBright',
     code: 'blueBright',
+    synKeyword: 'magentaBright',
+    synString: 'cyanBright',
+    synNumber: 'blueBright',
+    synComment: 'gray',
+    synFunction: 'cyan',
+    synType: 'magenta',
+    synPunct: 'white',
+    codeBorder: 'magenta',
   },
   noir: {
     // Monochrome with a single red accent — chrome in shades of gray.
@@ -309,6 +400,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'whiteBright',
     bullet: 'white',
     code: 'whiteBright',
+    synKeyword: 'whiteBright',
+    synString: 'white',
+    synNumber: 'whiteBright',
+    synComment: 'gray',
+    synFunction: 'whiteBright',
+    synType: 'white',
+    synPunct: 'gray',
+    codeBorder: 'gray',
   },
   synthwave: {
     // Retro grid: magenta sky, cyan horizon, a yellow sun.
@@ -334,6 +433,14 @@ export const THEMES: Record<string, Theme> = {
     heading: 'magentaBright',
     bullet: 'cyanBright',
     code: 'yellowBright',
+    synKeyword: 'magentaBright',
+    synString: 'cyanBright',
+    synNumber: 'yellowBright',
+    synComment: 'gray',
+    synFunction: 'cyan',
+    synType: 'magenta',
+    synPunct: 'white',
+    codeBorder: 'magenta',
   },
 };
 
@@ -341,6 +448,12 @@ export const THEME_NAMES: string[] = Object.keys(THEMES);
 
 /** The active palette. Mutated in place by setTheme(); read at render time. */
 export const theme: Theme = { ...THEMES.astro };
+
+/**
+ * Bumped by setTheme(). Renderers that memoize color-derived output include
+ * this in their cache key so a theme switch is picked up immediately.
+ */
+export let themeRevision = 0;
 
 /**
  * Swap the active palette (unknown/empty names fall back to 'astro').
@@ -352,6 +465,7 @@ export function setTheme(name?: string | null): string {
   for (const key of Object.keys(t) as (keyof Theme)[]) {
     theme[key] = t[key];
   }
+  themeRevision++;
   return applied;
 }
 

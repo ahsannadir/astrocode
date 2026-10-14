@@ -444,8 +444,9 @@ export class OpenaiProvider implements AIProvider {
     let sawToolCalls = false;
 
     let buffer = '';
+    let sawDone = false;
     try {
-      while (true) {
+      while (!sawDone) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -456,7 +457,12 @@ export class OpenaiProvider implements AIProvider {
           buffer = buffer.slice(idx + 1);
           if (!line.startsWith('data:')) continue;
           const payload = line.slice(5).trim();
-          if (payload === '[DONE]') break;
+          if (payload === '[DONE]') {
+            // End of stream sentinel — stop reading; further reads would just
+            // hang until the server closes the socket.
+            sawDone = true;
+            break;
+          }
           let json: any;
           try {
             json = JSON.parse(payload);

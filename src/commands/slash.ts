@@ -44,8 +44,11 @@ export interface SlashResult {
   rewind?: boolean;
   /** If true, run post-edit verification (lint/test). */
   verify?: boolean;
-  /** If true, auto-commit current changes. */
-  autocommit?: boolean;
+  /**
+   * If set, auto-commit current changes. A string carries a custom commit
+   * message (from `/commit <msg>`); an empty string means "use the default".
+   */
+  autocommit?: string;
   /** A session to restore into the conversation (from /load). */
   load?: SessionData | null;
   /** Current session name (e.g. after /save or /new). */
@@ -218,8 +221,7 @@ Tips
 • !<cmd> runs a shell command yourself (agent not involved), e.g. !git status.
 • ↑/↓ in the prompt recall history · PgUp/PgDn scroll the transcript.
 • Set ASTROCODE_API_KEY / ASTROCODE_MODEL / ASTROCODE_BASE_URL for a live model.
-• ASTROCODE_BUDGET caps spending; /undo reverts the last file change.
-• Headless: astrocode -p "task" runs one shot and exits (see --json, -c, --plan).`;
+• ASTROCODE_BUDGET caps spending; /undo reverts the last file change.`;
 
 export async function runSlashCommand(
   raw: string,
@@ -548,7 +550,13 @@ export async function runSlashCommand(
       return { handled: true, verify: true };
     }
     case '/commit': {
-      return { handled: true, autocommit: true, message: arg ? `Committing: ${arg}` : 'Committing current changes…' };
+      // Pass the custom message through to autoCommit; an empty arg means
+      // "use the generated default message".
+      return {
+        handled: true,
+        autocommit: arg || '',
+        message: arg ? `Committing: ${arg}` : 'Committing current changes…',
+      };
     }
     case '/context': {
       const limit = contextLimitFor(ctx.config.model);

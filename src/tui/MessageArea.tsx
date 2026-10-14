@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme, spinnerFrames } from './theme.js';
+import {
+  richLines,
+  wrapText,
+  fitLine,
+  type UILine,
+} from './markdown.js';
+
+export type { UISegment } from './markdown.js';
 
 /** One worker's live state inside an agent_activity item. */
 export interface AgentWorker {
@@ -24,133 +32,6 @@ export type UIItem =
   | { kind: 'agent_activity'; workers: AgentWorker[]; active: boolean }
   | { kind: 'system'; text: string }
   | { kind: 'error'; text: string };
-
-/** One styled span inside a line (markdown-lite inline: **bold**, `code`). */
-export interface UISegment {
-  text: string;
-  color?: string;
-  bold?: boolean;
-}
-
-interface UILine {
-  text: string;
-  color?: string;
-  dim?: boolean;
-  inverse?: boolean;
-  bold?: boolean;
-  /**
-   * Styled spans to render instead of `text` (which must stay the plain
-   * concatenation of the segments so selection/copy keeps working).
-   */
-  segments?: UISegment[];
-  /**
-   * Plain text to copy when this line is inside a selection. Chrome-only
-   * lines (labels, tool banners, activity cards) set copy: '' so they are
-   * skipped; lines without a copy field copy their visible text as-is.
-   */
-  copy?: string;
-}
-
-/**
- * Wrap long text into lines of at most `width` characters (greedy).
- * Falls back to hard-cutting words longer than the width (e.g. URLs or
- * minified code) instead of letting them overflow the pane, where they
- * wrap and corrupt the layout math.
- */
-function wrapText(text: string, width: number): string[] {
-  if (width <= 1) return [text];
-  const out: string[] = [];
-  for (const rawLine of text.split('\n')) {
-    if (rawLine === '') {
-      out.push('');
-      continue;
-    }
-    let line = rawLine;
-    while (line.length > width) {
-      let cut = line.lastIndexOf(' ', width);
-      if (cut <= 0) cut = width; // hard-cut overlong unbroken tokens
-      out.push(line.slice(0, cut));
-      line = line.slice(cut).replace(/^ /, '');
-    }
-    out.push(line);
-  }
-  return out;
-}
-
-/** Keep a single UI row within `width` cells (ellipsis for the overflow). */
-function fitLine(text: string, width: number): string {
-  if (width <= 0 || text.length <= width) return text;
-  return width <= 1 ? '…' : text.slice(0, width - 1) + '…';
-}
-
-/**
- * Parse markdown-lite inline spans (**bold**, `code`) from a single wrapped
- * line into styled segments. Unknown markers are left untouched, so plain
- * text (and code that happens to contain backticks at line boundaries)
- * degrades gracefully.
- */
-function inlineSegments(line: string, base?: string): UISegment[] {
-  const segs: UISegment[] = [];
-  const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(line)) !== null) {
-    if (m.index > last) segs.push({ text: line.slice(last, m.index), color: base });
-    const tok = m[0];
-    if (tok.startsWith('**')) {
-      segs.push({ text: tok.slice(2, -2), color: base, bold: true });
-    } else {
-      segs.push({ text: tok.slice(1, -1), color: theme.code });
-    }
-    last = m.index + tok.length;
-  }
-  if (last < line.length) segs.push({ text: line.slice(last), color: base });
-  return segs.length > 0 ? segs : [{ text: line, color: base }];
-}
-
-/**
- * Markdown-lite renderer for assistant text: converts headings, bullets,
- * blockquotes, code fences, and inline bold/code into thematically-colored
- * lines. Content lines carry `copy` so a selection pastes clean text (no
- * `#`/`-`/`**`/backtick markers, no ``` fence bars).
- */
-function richLines(text: string, width: number): UILine[] {
-  const out: UILine[] = [];
-  let fence = false;
-  for (const line of text.split('\n')) {
-    if (/^\s*```/.test(line)) {
-      fence = !fence;
-      wrapText(line.trim(), width).forEach((l) =>
-        out.push({ text: l, color: theme.muted, dim: true, copy: '' }),
-      );
-      continue;
-    }
-    if (fence) {
-      wrapText(line, width).forEach((l) =>
-        out.push({ text: l, color: theme.code, copy: l }),
-      );
-      continue;
-    }
-    let color: string = theme.assistant;
-    let display = line;
-    let bold = false;
-    if (/^#{1,3}\s+/.test(line)) {
-      color = theme.heading;
-      display = line.replace(/^#{1,3}\s+/, '').trim();
-      bold = true;
-    } else if (/^\s*[-*]\s+/.test(line)) {
-      color = theme.bullet;
-      display = '  • ' + line.replace(/^\s*[-*]\s+/, '');
-    } else if (/^\s*>\s?/.test(line)) {
-      color = theme.muted;
-      display = '▍ ' + line.replace(/^\s*>\s?/, '');
-    }
-    wrapText(display === '' ? line : display, width).forEach((l) =>
-      out.push({ text: l, color, bold, copy: l, segments: inlineSegments(l, color) }),
-    );
-  }
-  return out;
-}
 
 function flatten(items: UIItem[], width: number, tick: number): UILine[] {
   const lines: UILine[] = [];
@@ -485,6 +366,9 @@ export function MessageArea({
                   key={j}
                   color={s.color ?? l.color ?? 'white'}
                   bold={s.bold}
+                  italic={s.italic}
+                  underline={s.underline}
+                  strikethrough={s.strikethrough}
                   dimColor={l.dim}
                 >
                   {s.text}

@@ -9,13 +9,15 @@ import {
   theme,
   setTheme,
   validThemeColors,
+  themeRevision,
 } from '../src/tui/theme.js';
 
 const EXPECTED_KEYS = [
   'ascii', 'asciiAccent', 'star', 'user', 'assistant', 'assistantLabel',
   'system', 'error', 'toolName', 'toolOk', 'toolFail', 'muted', 'border',
   'status', 'prompt', 'promptSymbol', 'thinking', 'title', 'plan', 'heading',
-  'bullet', 'code',
+  'bullet', 'code', 'synKeyword', 'synString', 'synNumber', 'synComment',
+  'synFunction', 'synType', 'synPunct', 'codeBorder',
 ];
 
 test('themes: registry has astro plus several palettes', () => {
@@ -52,4 +54,13 @@ test('themes: setTheme falls back to astro for unknown/empty names', () => {
   assert.equal(setTheme(''), 'astro');
   assert.equal(setTheme(undefined), 'astro');
   assert.deepEqual(theme, THEMES.astro);
+});
+
+test('themes: setTheme bumps the revision so color caches invalidate', () => {
+  setTheme('astro');
+  const before = themeRevision;
+  setTheme('dracula');
+  assert.ok(themeRevision > before, 'revision should increase on theme change');
+  assert.equal(theme.synKeyword, THEMES.dracula.synKeyword);
+  setTheme('astro');
 });

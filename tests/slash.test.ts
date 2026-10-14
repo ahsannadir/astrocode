@@ -151,6 +151,20 @@ test('/copy all: joins user + assistant content', async () => {
   assert.ok(out.includes(b64), 'OSC 52 payload contains the joined transcript');
 });
 
+test('/commit: passes a custom message through (not just a boolean flag)', async () => {
+  const ctx = makeCtx([]);
+  const withMsg = await runSlashCommand('/commit fix: tidy the parser', ctx);
+  assert.equal(withMsg.handled, true);
+  assert.equal(withMsg.autocommit, 'fix: tidy the parser');
+  assert.ok(withMsg.message!.includes('fix: tidy the parser'));
+
+  const noMsg = await runSlashCommand('/commit', ctx);
+  assert.equal(noMsg.handled, true);
+  // Empty string = "use the generated default message"; must still trigger a commit.
+  assert.equal(noMsg.autocommit, '');
+  assert.notEqual(noMsg.autocommit, undefined);
+});
+
 test('/copy: no assistant reply yet → helpful message, no clipboard write', async () => {
   const ctx = makeCtx([{ role: 'user', content: 'only a question' }]);
   const out = await captureStdout(async () => {

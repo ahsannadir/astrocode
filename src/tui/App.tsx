@@ -769,8 +769,9 @@ export function App({ config, cwd }: Props) {
             text: r.text,
           });
         }
-        if (res.autocommit) {
-          const r = await autoCommit(cwd);
+        if (res.autocommit !== undefined) {
+          // A non-empty string is a user-supplied commit message (/commit <msg>).
+          const r = await autoCommit(cwd, res.autocommit || undefined);
           pushItem({
             kind: r.ok ? 'tool_result' : 'error',
             name: 'commit',

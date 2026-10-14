@@ -88,6 +88,57 @@ test('MCP client: connect, list namespaced tools, call, error handling', async (
   }
 });
 
+test('MCP client: tool namespacing survives server names that share a prefix or contain underscores', async () => {
+  const tmp = await makeTempDir();
+  const serverFile = await writeServer(tmp);
+  await fs.mkdir(path.join(tmp, '.astrocode'), { recursive: true });
+  // 'fs' is a prefix of 'fs_extra' — naive prefix matching would mis-route a
+  // call for mcp_fs_extra_echo into the 'fs' connection.
+  await fs.writeFile(
+    path.join(tmp, '.astrocode', 'mcp.json'),
+    JSON.stringify({
+      mcpServers: {
+        fs: { command: 'node', args: [serverFile] },
+        fs_extra: { command: 'node', args: [serverFile] },
+      },
+    }),
+    'utf8',
+  );
+  const { connectAllMcp, allMcpToolSchemas, executeMcpTool, disconnectAllMcp } = await import('../src/mcp.js');
+  try {
+    const { connected, failed } = await connectAllMcp(tmp);
+    assert.equal(failed.length, 0);
+    assert.deepEqual(connected.sort(), ['fs', 'fs_extra']);
+
+    const names = allMcpToolSchemas().map((t) => t.function.name).sort();
+    assert.deepEqual(names, [
+      'mcp_fs_boom',
+      'mcp_fs_echo',
+      'mcp_fs_extra_boom',
+      'mcp_fs_extra_echo',
+    ]);
+
+    // The description must carry the FULL server name, not the '_'-truncated one.
+    const fsExtra = allMcpToolSchemas().find((t) => t.function.name === 'mcp_fs_extra_echo');
+    assert.ok(fsExtra);
+    assert.ok(
+      fsExtra!.function.description.includes('[MCP:fs_extra]'),
+      `description names the full server: ${fsExtra!.function.description}`,
+    );
+
+    // Both calls resolve to the right connection (same fake, so echo proves routing).
+    const a = await executeMcpTool('mcp_fs_echo', { text: 'one' });
+    assert.ok(a.ok);
+    assert.equal(a.text, 'echo: one');
+    const b = await executeMcpTool('mcp_fs_extra_echo', { text: 'two' });
+    assert.ok(b.ok);
+    assert.equal(b.text, 'echo: two');
+  } finally {
+    disconnectAllMcp();
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test('MCP client: unreachable server lands in failed, never throws', async () => {
   const tmp = await makeTempDir();
   await fs.mkdir(path.join(tmp, '.astrocode'), { recursive: true });

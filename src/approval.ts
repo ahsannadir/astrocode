@@ -4,7 +4,7 @@
  * The danger list (isDangerousCommand) is a blunt instrument: it blocks the
  * catastrophic and runs everything else. Approval adds the missing middle
  * layer — a bounded "run this? [y]es / [n]o / a[lways]" decision, surfaced in
- * the TUI (or answered automatically in headless mode), with the user's
+ * the TUI, with the user's
  * "always" decisions remembered for the session so a test suite doesn't ask
  * twenty times.
  *
@@ -85,7 +85,7 @@ export function isRiskyCommand(command: string): boolean {
   return patterns.some((re) => re.test(c));
 }
 
-/** Decision the TUI (or headless mode) reports back for a pending request. */
+/** Decision the TUI reports back for a pending request. */
 export type ApprovalDecision = 'approved' | 'denied' | 'always';
 
 export interface ApprovalRequest {
@@ -101,8 +101,8 @@ export interface ApprovalVerdict {
 }
 
 /**
- * Session-scoped approval state. One instance lives in the TUI app (or a
- * fresh one per headless run). The allowlist starts from env/config so
+ * Session-scoped approval state. One instance lives in the TUI app. The
+ * allowlist starts from env/config so
  * `ASTROCODE_APPROVE=npm test,npm run typecheck` pre-approves commands.
  */
 export class ApprovalGate {
@@ -150,8 +150,8 @@ export class ApprovalGate {
     }
 
     if (!this.ask) {
-      // No UI wired (shouldn't happen in the TUI; possible in tests/headless
-      // without a resolver): fail closed in 'all', fail open-but-loud in
+      // No UI wired (shouldn't happen in the TUI; possible in tests without
+      // a resolver): fail closed in 'all', fail open-but-loud in
       // 'dangerous' for non-danger-list commands — actually fail CLOSED
       // always, predictable beats clever.
       return {

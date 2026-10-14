@@ -28,14 +28,6 @@ export interface CliArgs {
   cwd?: string;
   help: boolean;
   version: boolean;
-  /** Headless one-shot: the task text (present when -p/--print was given). */
-  print?: string;
-  /** With -p: emit JSON instead of a text transcript. */
-  json?: boolean;
-  /** With -p: resume a saved session by name. */
-  continueSession?: string;
-  /** With -p: read-only plan mode. */
-  plan?: boolean;
 }
 
 export function parseArgs(argv: string[]): CliArgs {
@@ -64,25 +56,9 @@ export function parseArgs(argv: string[]): CliArgs {
       case '--cwd':
         args.cwd = argv[++i];
         break;
-      case '--print':
-      case '-p':
-        args.print = argv[++i] ?? '';
-        break;
-      case '--json':
-        args.json = true;
-        break;
-      case '--continue':
-      case '-c':
-        args.continueSession = argv[++i];
-        break;
-      case '--plan':
-        args.plan = true;
-        break;
       default:
         if (a.startsWith('--model=')) args.model = a.slice('--model='.length);
         else if (a.startsWith('--cwd=')) args.cwd = a.slice('--cwd='.length);
-        else if (a.startsWith('--print=')) args.print = a.slice('--print='.length);
-        else if (a.startsWith('--continue=')) args.continueSession = a.slice('--continue='.length);
         break;
     }
   }

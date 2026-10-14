@@ -112,7 +112,7 @@ export interface SubAgentOptions {
   role: string;
   /** Workspace the sub-agent operates in. */
   cwd: string;
-  /** Provider used for the sub-agent\u2019s own completions. */
+  /** Provider used for the sub-agent's own completions. */
   provider: AIProvider;
   /** Tool schemas the sub-agent may call (pre-filtered by the caller). */
   tools: ToolSchema[];

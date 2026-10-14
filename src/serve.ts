@@ -1,7 +1,7 @@
 /**
  * MCP server mode for AstroCode — `astrocode serve` (the Open Tool Bus, part 3).
  *
- * Exposes AstroCode's own 15 built-in tools over the Model Context Protocol
+ * Exposes AstroCode's own 16 built-in tools over the Model Context Protocol
  * (JSON-RPC 2.0 over stdio), so ANY other MCP-capable agent — Claude Code,
  * Codex, an editor — can delegate real work (file edits, searches, commands,
  * swarm status) to a local AstroCode instance. Read-only by default; enable

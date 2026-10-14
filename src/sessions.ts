@@ -61,11 +61,25 @@ export async function ensureSessionDir(): Promise<void> {
   await fs.mkdir(sessionDir(), { recursive: true });
 }
 
+/**
+ * Monotonic write clock. Two saves within the same millisecond would otherwise
+ * share an `updatedAt`, making `listSessions()`'s recency ordering ambiguous
+ * (and the previous comparator returned -1 for equal keys, which is not a valid
+ * total order and produced arbitrary results). Each save returns a timestamp
+ * strictly greater than the last one this process issued.
+ */
+let lastStamp = 0;
+function nextUpdatedAt(): string {
+  const now = Date.now();
+  lastStamp = now > lastStamp ? now : lastStamp + 1;
+  return new Date(lastStamp).toISOString();
+}
+
 export async function saveSession(name: string, data: Omit<SessionData, 'name' | 'updatedAt'>): Promise<SessionData> {
   await ensureSessionDir();
   const safe = sanitize(name);
   const existing = await loadSession(safe).catch(() => null);
-  const now = new Date().toISOString();
+  const now = nextUpdatedAt();
   const session: SessionData = {
     ...data,
     name: safe,
@@ -110,7 +124,14 @@ export async function listSessions(): Promise<SessionMeta[]> {
       /* skip corrupt session */
     }
   }
-  metas.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  // Newest first by updatedAt. saveSession() issues strictly increasing
+  // timestamps, but legacy files may still tie; the comparator must be a valid
+  // total order (never -1 for equal keys) so ties fall back to name ascending.
+  metas.sort((a, b) => {
+    if (a.updatedAt !== b.updatedAt) return a.updatedAt < b.updatedAt ? 1 : -1;
+    if (a.name !== b.name) return a.name < b.name ? -1 : 1;
+    return 0;
+  });
   return metas;
 }
 

@@ -172,10 +172,13 @@ export class McpConnection {
     this.child.stdin!.write(JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n', () => {});
   }
 
-  /** Remote tools, namespaced as mcp_<server>_<tool>. */
-  namespacedTools(): Array<McpToolDef & { namespaced: string }> {
-    return this.tools.map((t) => ({ ...t, namespaced: `mcp_${this.serverName}_${t.name}` }));
-  }
+/** Remote tools, namespaced as mcp_<server>_<tool>. */
+namespacedTools(): Array<McpToolDef & { namespaced: string }> {
+  return this.tools.map((t) => ({
+    ...t,
+    namespaced: `mcp_${this.serverName}_${t.name}`,
+  }));
+}
 
   async callTool(toolName: string, args: Record<string, unknown>, timeoutMs = 30_000): Promise<{ ok: boolean; text: string }> {
     const res = await this.rpc('tools/call', { name: toolName, arguments: args }, timeoutMs);
@@ -246,19 +249,26 @@ export function disconnectAllMcp(): void {
  * Non-object / missing schemas degrade to a free-form `input` string param so
  * the model can still call the tool.
  */
-export function mcpToolToSchema(t: McpToolDef & { namespaced: string }): ToolSchema {
+export function mcpToolToSchema(
+  t: McpToolDef & { namespaced: string },
+  serverName?: string,
+): ToolSchema {
   const input = (t.inputSchema ?? {}) as {
     type?: string;
     properties?: Record<string, unknown>;
     required?: string[];
   };
   const usable = input.type === 'object' && input.properties && typeof input.properties === 'object';
+  // Prefer the real server name (passed by the caller) over re-deriving it by
+  // splitting the namespaced id — server names may contain underscores, so
+  // `namespaced.split('_')[1]` truncates e.g. "my_server" to "my".
+  const server = serverName ?? t.namespaced.split('_')[1] ?? t.namespaced;
   return {
     type: 'function',
     function: {
       name: t.namespaced,
       description:
-        `[MCP:${t.namespaced.split('_')[1]}] ` + (t.description ?? 'External MCP tool.'),
+        `[MCP:${server}] ` + (t.description ?? 'External MCP tool.'),
       parameters: usable
         ? ({
             type: 'object',
@@ -280,29 +290,35 @@ export function allMcpToolSchemas(): ToolSchema[] {
   const out: ToolSchema[] = [];
   for (const [name, conn] of connections) {
     if (!conn.isAlive) continue;
-    for (const t of conn.namespacedTools()) out.push(mcpToolToSchema(t));
+    for (const t of conn.namespacedTools()) out.push(mcpToolToSchema(t, name));
   }
   return out;
 }
 
-/** Execute a namespaced MCP tool call (mcp_<server>_<tool>). */
+/**
+ * Execute a namespaced MCP tool call (mcp_<server>_<tool>).
+ *
+ * Resolution matches the FULL namespaced name against each live connection's
+ * actual tool list (longest server name first). A naive `rest.startsWith(
+ * server + '_')` prefix test is ambiguous when one server name is a prefix of
+ * another ("fs" vs "fsx"), so we never guess from the prefix alone.
+ */
 export async function executeMcpTool(namespaced: string, args: Record<string, unknown>): Promise<{ ok: boolean; text: string }> {
-  const prefix = `mcp_`;
-  if (!namespaced.startsWith(prefix)) return { ok: false, text: `Not an MCP tool: ${namespaced}` };
-  const rest = namespaced.slice(prefix.length);
-  for (const [serverName, conn] of connections) {
+  if (!namespaced.startsWith('mcp_')) {
+    return { ok: false, text: `Not an MCP tool: ${namespaced}` };
+  }
+  // Longest server name first so 'fsx_...' is not swallowed by 'fs_...'.
+  const candidates = [...connections.entries()].sort(
+    (a, b) => b[0].length - a[0].length,
+  );
+  for (const [, conn] of candidates) {
     if (!conn.isAlive) continue;
-    if (rest === serverName || rest.startsWith(serverName + '_')) {
-      const toolName = rest === serverName ? '' : rest.slice(serverName.length + 1);
-      const def = conn.namespacedTools().find((t) => t.name === toolName);
-      if (!def) {
-        return { ok: false, text: `Unknown MCP tool "${toolName}" on server "${serverName}".` };
-      }
-      try {
-        return await conn.callTool(toolName, args);
-      } catch (e: any) {
-        return { ok: false, text: `MCP call failed: ${e?.message ?? e}` };
-      }
+    const match = conn.namespacedTools().find((t) => t.namespaced === namespaced);
+    if (!match) continue;
+    try {
+      return await conn.callTool(match.name, args);
+    } catch (e: any) {
+      return { ok: false, text: `MCP call failed: ${e?.message ?? e}` };
     }
   }
   return { ok: false, text: `No live MCP connection matches "${namespaced}".` };

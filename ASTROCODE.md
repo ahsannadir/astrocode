@@ -33,18 +33,18 @@ conventions, build commands, and anything the agent should always know here.
   (`src/skills.ts`, `use_skill` tool, `.astrocode/skills/<name>/SKILL.md`).
   External tools merge into `getToolSchemas()`/`getToolNames()` and dispatch
   inside `executeTool` BEFORE the builtin registry.
-- **Headless engine** (`src/headless.ts`, `astrocode -p`): the SAME agent loop
-  as the TUI (system prompt, compaction, plan gating, loop sensor, verify
-  feedback, budget) extracted into `runAgentTurn`. `-p` streams the answer,
-  `--json` emits one JSON document (nothing else on stdout), `-c` resumes a
-  saved session, `--plan` forces read-only. Exit codes: 0 ok / 1 error /
-  2 verify-failed. `readStdinIfPiped` prepends piped stdin to the prompt.
+- **Terminal rendering** (`src/tui/markdown.ts` + `src/tui/syntax.ts`): the
+  assistant renderer. `richLines(text, width)` returns `UILine[]` — styled
+  segments plus the plain `copy` text a selection pastes. Fenced code blocks
+  get a language label, a `│ ` gutter and per-token colors from the
+  dependency-free highlighter (`detectLanguage` + `highlightCode`, memoized by
+  language+source). Themes carry `syn*`/`codeBorder` roles and `themeRevision`
+  bumps on `setTheme()` to invalidate both caches. Keep these modules pure.
 - **Shell approval** (`src/approval.ts`): `run_command` consults an
   `ApprovalGate` from `ToolContext.approvalGate` when present. Modes
   off/dangerous/all; `y/a/n` TUI prompt (`src/tui/ApprovalPrompt.tsx`); the
-  "always" decision remembers a command PREFIX for the session. Headless
-  mode can't prompt, so non-off modes fail CLOSED there; `ASTROCODE_APPROVE`
-  pre-approves prefixes in both. The canonical `isDangerousCommand` also
+  "always" decision remembers a command PREFIX for the session. `ASTROCODE_APPROVE`
+  pre-approves prefixes. The canonical `isDangerousCommand` also
   lives in approval.ts (registry re-exports it).
 - **Real token usage** (`src/ai/openai.ts` `extractUsage` + `cost.ts`
   `costFromUsage`): chat completions send `stream_options.include_usage`,
@@ -73,9 +73,8 @@ conventions, build commands, and anything the agent should always know here.
   `truncateToolText` (`src/tooloutput.ts`) — never add a tool that returns
   unbounded output and bypasses it.
 - **Every looping context gets a `LoopSensor`** (`src/loopsensor.ts`): the
-  main loop creates one per turn (App.tsx), the headless loop creates one
-  per `runAgentTurn` call, each sub-agent run gets its own (registry
-  spawnOne). Identical repeat calls are nudged then blocked.
+  main loop creates one per turn (App.tsx), each sub-agent run gets its own
+  (registry spawnOne). Identical repeat calls are nudged then blocked.
 - **Tool args are repaired + coerced** in `executeTool`
   (`src/toolargs.ts`) before handlers run — handlers may assume typed args.
 - **Compaction never breaks tool pairing**: use `compactConversation`
@@ -89,3 +88,8 @@ conventions, build commands, and anything the agent should always know here.
 - New harness behavior needs offline unit tests (fake providers, tmp dirs —
   no network); swarm/toolbus tests live in `tests/swarm.test.ts` and
   `tests/toolbus.test.ts`.
+- **Rendering is centralized** in `src/tui/markdown.ts` (pure + tested in
+  `tests/markdown.test.ts`; highlighter in `tests/syntax.test.ts`). Add new
+  block types there rather than inline in a component, and give every
+  non-chrome `UILine` a `copy` string so `/copy` and Ctrl+K selection stay
+  clean (code copies without its gutter; labels/rules set `copy: ''`).

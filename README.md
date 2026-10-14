@@ -40,24 +40,19 @@ astrocode -m gpt-4o             # override the model
 astrocode serve                 # run as an MCP server over stdio
 ```
 
-### Headless mode (scripts, CI, pipes)
+### Automation and integrations
+
+AstroCode is an interactive terminal app, so it needs a real TTY. To let another
+tool drive it — a script, an editor, or a different agent — use the MCP server,
+which speaks JSON-RPC 2.0 over stdio and is read-only by default:
 
 ```bash
-astrocode -p "explain what changed in git diff --staged"
-echo "the log output" | astrocode -p "find the root cause"   # stdin prepends
-astrocode -p --json "list every TODO in src/" > report.json  # machine output
-astrocode -p -c my-session "continue where we left off"      # resume /save
-astrocode -p --plan "how would you add auth?"                # read-only
+astrocode serve                          # expose AstroCode's tools to an MCP client
+ASTROCODE_SERVE_WRITES=1 astrocode serve # opt in to mutating tools
 ```
 
-`-p/--print` runs the same agent loop as the TUI, streams the final answer,
-and exits with a meaningful code: `0` ok, `1` error, `2` verification failed.
-With `--json` stdout is a single JSON document (`answer`, `turns`, `costUsd`,
-`usage`, `messages`) safe to pipe into `jq`.
-
-```bash
-astrocode -p "summarize the last commit" | astrocode -p "turn this summary into release notes"
-```
+With stdout piped or no terminal attached, AstroCode prints a banner with that
+hint instead of trying to draw the TUI.
 
 ## Connecting a model
 
@@ -257,14 +252,15 @@ commas, type drift) are repaired instead of failing the turn; and a sub-agent
 that burns its budget without answering gets one final tool-less call to write
 its report.
 
-**The TUI.** A twinkling ASCII banner, streaming replies with markdown-lite
-styling, a live status bar (mode, model, context %, tasks, spend, branch,
-cwd), a task panel the agent keeps updated via the `todo` tool, and real
-modals for `/login`, `/models`, `/settings`, and `/theme`. Twelve color
-themes. Your terminal's native mouse selection works, and `Ctrl+K` copies
-clean text without banners or prefixes; `/copy` grabs the last reply. If
-stdout isn't a TTY (CI, a pipe), it prints a banner and exits instead of
-crashing.
+**The TUI.** A twinkling ASCII banner, streaming replies rendered as real
+markdown — headings, lists, tables, and fenced code blocks with syntax
+highlighting for a dozen-plus languages — plus a live status bar (mode, model,
+context %, tasks, spend, branch, cwd), a task panel the agent keeps updated via
+the `todo` tool, and real modals for `/login`, `/models`, `/settings`, and
+`/theme`. Twelve color themes, each with its own syntax palette. Your terminal's
+native mouse selection works, and `Ctrl+K` copies clean text without banners or
+prefixes; `/copy` grabs the last reply. If stdout isn't a TTY (CI, a pipe), it
+prints a banner and exits instead of crashing.
 
 ## Configuration
 
@@ -275,10 +271,6 @@ astrocode [options]
 
   -d, --demo         Force offline demo mode (no API key needed)
   -m, --model <n>    Set the model (e.g. gpt-4o)
-  -p, --print <task> One-shot headless run; prints the answer and exits
-      --json         With -p: emit a single JSON document
-  -c, --continue <n> With -p: resume a saved session
-      --plan         With -p: read-only plan mode
       --cwd <path>   Working directory (default: current)
       --serve        Run as an MCP server over stdio
   -h, --help         Show help

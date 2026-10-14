@@ -74,8 +74,7 @@ export interface ToolContext {
   loopSensor?: LoopSensor;
   /**
    * Shell-approval gate (off by default). When present, run_command consults
-   * it before executing; the TUI wires the decision prompt, headless mode
-   * auto-denies.
+   * it before executing; the TUI wires the decision prompt.
    */
   approvalGate?: ApprovalGate;
 }
