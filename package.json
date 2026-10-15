@@ -19,6 +19,7 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "test": "tsx --test tests/*.test.ts",
+    "probe": "npm run build && python3 scripts/run_probes.py",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "link": "npm run build && npm link && npm unlink -g astro 2>/dev/null; true"
   },

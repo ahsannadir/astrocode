@@ -1,139 +1,72 @@
 #!/usr/bin/env python3
-"""Probe 2: modal tour with poll-based waits (no instant assertions),
-to separate app bugs from snapshot timing races."""
-import codecs
-import fcntl
-import os
-import pty
-import select
-import signal
-import struct
+"""Probe: the popup tour — every modal opens, and Esc closes it.
+
+Walks /theme (open, apply), /settings (open, Esc), /login (open, reach the key
+stage, type, Esc back, Esc out) and finishes by checking the prompt still works.
+This is the broad counterpart to the focused /models and /login probes: it is
+where a change to the shared popup plumbing shows up first.
+
+  python3 scripts/probe_modals.py
+
+PROBE_ROWS / PROBE_COLS resize the fake terminal (default 32x110).
+"""
 import sys
-import termios
-import time
+import os
 
-sys.path.insert(0, os.path.dirname(__file__))
-from tui_verify import Vt, COLS, ROWS
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pty_probe import Checks, Session
 
-pid, fd = pty.fork()
-if pid == 0:
-    os.environ["TERM"] = "xterm-256color"
-    os.environ["NO_COLOR"] = "1"
-    os.execvp("node", ["node", "dist/index.js", "--demo"])
-
-fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", ROWS, COLS, 0, 0))
-vt = Vt()
-dec = codecs.getincrementaldecoder("utf-8")("replace")
+THEME_TITLE = "Select a theme"
+SETTINGS_TITLE = "⚙ Settings"
+LOGIN_TITLE = "Connect a provider"
 
 
-def pump(wait=0.5):
-    end = time.time() + wait
-    while time.time() < end:
-        r, _, _ = select.select([fd], [], [], 0.05)
-        if not r:
-            continue
-        try:
-            chunk = os.read(fd, 65536)
-        except OSError:
-            return
-        if not chunk:
-            return
-        vt.feed(dec.decode(chunk))
-        end = time.time() + 0.1
+def run() -> Checks:
+    checks = Checks("modals")
+    # Temp ASTROCODE_CONFIG_DIR: applying a theme persists, and a probe must
+    # never rewrite the developer's real ~/.astrocode/config.json.
+    with Session() as s:
+        s.await_ready()
+
+        # ---- /theme: opens, ↑/↓ live, Enter applies ----------------------
+        s.submit("/theme", 0.8)
+        checks.check("theme modal opens", s.wait_for(THEME_TITLE))
+        s.key(b"\x1b[B")  # down
+        s.key(b"\r", 0.8)  # apply
+        checks.check("theme applies", s.wait_for("Theme switched to"))
+        checks.check("theme modal closed after applying", s.wait_gone(THEME_TITLE))
+
+        # ---- /settings: opens, Esc closes --------------------------------
+        s.submit("/settings", 0.8)
+        checks.check("settings modal opens", s.wait_for(SETTINGS_TITLE))
+        s.key(b"\x1b", 0.8)
+        checks.check("settings modal closes on Esc", s.wait_gone(SETTINGS_TITLE))
+
+        # ---- /login: staged flow, Esc backs out one stage at a time ------
+        s.submit("/login", 0.8)
+        checks.check("login modal opens", s.wait_for(LOGIN_TITLE))
+        s.key(b"\r", 0.8)  # Enter on the first provider → key stage
+        checks.check("key stage reached", s.wait_for("API key"))
+        s.type_text("sk-test-123")
+        checks.check("typing lands in the key field", s.wait_for("sk-test-123"))
+        s.key(b"\x1b")  # back to the provider list
+        checks.check("login Esc backs out one stage", s.wait_for(LOGIN_TITLE))
+        s.key(b"\x1b", 0.8)  # close the popup
+        checks.check("login modal closes on Esc", s.wait_gone(LOGIN_TITLE))
+
+        # ---- the prompt still works after the tour -----------------------
+        s.submit("final check", 0.8)
+        checks.check("prompt works after the tour", s.wait_for("❯ final check"))
+
+        checks.check("layout tripwire never fired", not s.tripwire_fired())
+    return checks
 
 
-def wait_for(needle, timeout=4.0):
-    end = time.time() + timeout
-    while time.time() < end:
-        pump(0.3)
-        if needle in vt.text():
-            return True
-    return False
+def main() -> int:
+    checks = run()
+    print(checks.summary())
+    return 0 if checks.ok else 1
 
 
-def wait_gone(needle, timeout=4.0):
-    end = time.time() + timeout
-    while time.time() < end:
-        pump(0.3)
-        if needle not in vt.text():
-            return True
-    return False
-
-
-def cmd(s):
-    """Wait for the agent to be idle (prompt enabled), then type a slash
-    command and submit it like a human would (chars + Enter)."""
-    wait_idle()
-    for ch in s:
-        os.write(fd, ch.encode())
-        time.sleep(0.03)
-    pump(0.4)
-    os.write(fd, b"\r")
-    pump(0.5)
-
-
-def wait_idle(timeout=15.0):
-    """Wait until the status bar shows 'ready' (agent not busy)."""
-    end = time.time() + timeout
-    while time.time() < end:
-        pump(0.3)
-        if "● ready" in vt.text():
-            return True
-    return False
-
-
-results = []
-
-
-def check(name, ok):
-    results.append((name, ok))
-    print(("PASS " if ok else "FAIL ") + name)
-
-
-try:
-    pump(2.5)
-
-    cmd("/theme")
-    check("theme modal opens", wait_for("Select a theme"))
-    os.write(fd, b"\x1b[B")  # down
-    pump(0.4)
-    os.write(fd, b"\r")  # apply
-    check("theme applies", wait_for("Theme switched to"))
-
-    cmd("/settings")
-    check("settings modal opens", wait_for("⚙ Settings"))
-    os.write(fd, b"\x1b")  # Esc
-    check("settings modal closes on Esc", wait_gone("⚙ Settings"))
-
-    cmd("/login")
-    check("login modal opens", wait_for("Connect a provider"))
-    os.write(fd, b"\r")  # Enter on OpenAI → key stage
-    check("key stage reached", wait_for("API key"))
-    for ch in "sk-test-123":
-        os.write(fd, ch.encode())
-        time.sleep(0.03)
-    pump(0.5)
-    check("typing lands in key field", wait_for("sk-test-123"))
-    os.write(fd, b"\x1b")  # back to providers
-    pump(0.4)
-    os.write(fd, b"\x1b")  # close modal
-    check("login modal closes on Esc", wait_gone("Connect a provider"))
-
-    # prompt healthy afterwards
-    wait_idle()
-    for ch in "final check":
-        os.write(fd, ch.encode())
-        time.sleep(0.03)
-    pump(0.5)
-    check("prompt works after tour", wait_for("❯ final check"))
-
-    print()
-    failed = [n for n, ok in results if not ok]
-    print("ALL PROBE CHECKS PASSED" if not failed else f"FAILED: {failed}")
-    sys.exit(1 if failed else 0)
-finally:
-    try:
-        os.kill(pid, signal.SIGKILL)
-        os.waitpid(pid, 0)
-    except (ProcessLookupError, ChildProcessError):
-        pass
+if __name__ == "__main__":
+    sys.exit(main())

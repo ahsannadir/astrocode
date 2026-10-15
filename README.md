@@ -342,6 +342,7 @@ and server. `src/commands/slash.ts` handles the slash commands, and
 npm install
 npm run typecheck   # tsc --noEmit
 npm test            # node:test suite via tsx (tests/*.test.ts)
+npm run probe       # build + drive the real TUI in a pty (Python 3)
 npm run build       # tsc -> dist/
 npm run dev         # run from source with tsx
 ```
@@ -349,6 +350,14 @@ npm run dev         # run from source with tsx
 The tests cover the harness pieces: patch application, compaction, argument
 repair, truncation, sessions, cost math, and more. They run offline with fake
 providers and temp dirs, so they're safe in CI.
+
+`npm run probe` covers what unit tests can't: the keystroke → Ink → frame
+path. Each probe boots the built CLI in a pty in `--demo`, types real keys, and
+asserts on the emulated screen — popups opening and closing on `Esc`, the
+`/models` picker, and the `/login` reuse prompt — then the runner stops at the
+first failure. It needs Python 3 and a build (`npm run probe` builds first).
+Every probe is a script in `scripts/`; `python3 scripts/run_probes.py --list`
+shows which ones are part of the gate and which are diagnostics.
 
 ## FAQ
 

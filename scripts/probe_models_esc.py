@@ -5,164 +5,96 @@ Regression for the trapped picker — /models on a provider whose registry model
 list is empty ('OpenAI Compatible') rendered a popup that swallowed every key,
 Esc included, with no cancel affordance.
 
-Runs the real TUI in a PTY for two scenarios and asserts, on the rendered
-screen: the popup opens, Esc closes it, the prompt works afterwards, and the
-layout tripwire never fired (which would mean a frozen frame, not just a
-handled key).
+Scenarios:
+  openai      a normal provider: the picker lists models and Esc cancels.
+  compatible  the empty list: the picker explains itself and Esc still cancels.
+  openrouter  a very long list on a tight screen: the picker windows to its
+              row budget without pushing the frame onto Ink's direct-write
+              path (a stale paint that ignores keys).
 
-  python3 scripts/probe_models_esc.py openai       # normal provider
-  python3 scripts/probe_models_esc.py compatible   # empty model list
-  python3 scripts/probe_models_esc.py openrouter   # long list, tight screen
+Run everything (what `npm run probe` does):
+
+  python3 scripts/probe_models_esc.py
+
+Or one scenario while debugging:
+
+  python3 scripts/probe_models_esc.py compatible
 
 PROBE_ROWS / PROBE_COLS resize the fake terminal (default 32x110).
 """
-import codecs
-import fcntl
-import os
-import pty
-import select
-import shutil
-import signal
-import struct
 import sys
-import tempfile
-import termios
-import time
+import os
 
-sys.path.insert(0, os.path.dirname(__file__))
-from tui_verify import Vt, COLS, ROWS
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pty_probe import Checks, Session
 
-SCENARIO = sys.argv[1] if len(sys.argv) > 1 else "compatible"
+SCENARIOS = ["openai", "compatible", "openrouter"]
 TITLE = "Select a model"
-PROBE_ROWS = int(os.environ.get("PROBE_ROWS", ROWS))
-PROBE_COLS = int(os.environ.get("PROBE_COLS", COLS))
 
-results = []
-
-
-def check(name, ok):
-    results.append((name, ok))
-    print(("PASS " if ok else "FAIL ") + name)
-
-
-tmp = tempfile.mkdtemp(prefix="astrocode-probe-")
-env = {"ASTROCODE_CONFIG_DIR": tmp}
-if SCENARIO == "openrouter":
-    # A very long model list: the picker windows itself to the row budget, so
-    # on a tight screen this is the case that used to put the frame on Ink's
-    # direct-write path (a stale paint that ignores keys until something else
-    # forces a repaint).
-    with open(os.path.join(tmp, "config.json"), "w") as fh:
-        fh.write('{"provider":"openrouter","apiKey":"x","model":"openai/gpt-4o"}')
-elif SCENARIO == "compatible":
-    # Auth pointing at the 'OpenAI Compatible' provider, whose registry model
-    # list is empty — models are fetched live during /login and never stored
-    # in the provider registry.
-    with open(os.path.join(tmp, "config.json"), "w") as fh:
-        fh.write(
-            '{"provider":"openai-compatible","apiKey":"x","model":"local-llama",'
-            '"baseUrl":"http://127.0.0.1:1/v1"}'
-        )
-
-pid, fd = pty.fork()
-if pid == 0:
-    os.environ["TERM"] = "xterm-256color"
-    os.environ["NO_COLOR"] = "1"
-    os.environ.update(env)
-    os.execvp("node", ["node", "dist/index.js", "--demo"])
-fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", PROBE_ROWS, PROBE_COLS, 0, 0))
-
-vt = Vt()
-decoder = codecs.getincrementaldecoder("utf-8")("replace")
-raw = []
+CONFIGS = {
+    "openai": {"provider": "openai", "apiKey": "x", "model": "gpt-4o-mini"},
+    # An 'OpenAI Compatible' endpoint: its model list is fetched live during
+    # /login and never lands in the provider registry, so it is empty here.
+    "compatible": {
+        "provider": "openai-compatible",
+        "apiKey": "x",
+        "model": "local-llama",
+        "baseUrl": "http://127.0.0.1:1/v1",
+    },
+    "openrouter": {"provider": "openrouter", "apiKey": "x", "model": "openai/gpt-4o"},
+}
 
 
-def pump(wait=0.5):
-    end = time.time() + wait
-    while time.time() < end:
-        r, _, _ = select.select([fd], [], [], 0.05)
-        if not r:
-            continue
-        try:
-            chunk = os.read(fd, 65536)
-        except OSError:
-            return
-        if not chunk:
-            return
-        raw.append(chunk)
-        vt.feed(decoder.decode(chunk))
-        end = time.time() + 0.1
+def run_scenario(name: str) -> Checks:
+    checks = Checks(f"models/{name}")
+    with Session(config=CONFIGS[name]) as s:
+        s.pump(2.5)
+
+        s.submit("/models")
+        checks.check("/models picker opens", s.wait_for(TITLE))
+
+        if name == "compatible":
+            checks.check("empty list explains itself", s.wait_for("No models — reconnect with /login"))
+            checks.check("cancel affordance is on screen", s.wait_for("Esc cancel"))
+
+        s.key(b"\x1b")
+        checks.check("Esc closes the picker", s.wait_gone(TITLE))
+        checks.check("prompt works after cancelling", s.wait_for("❯", 3.0))
+
+        # The picker must also stay closable once keys have been pressed —
+        # selection state must never wedge the exit.
+        s.submit("/models")
+        checks.check("reopened", s.wait_for(TITLE))
+        s.key(b"\x1b[B")  # down
+        s.key(b"\x1b")  # Esc
+        checks.check("Esc still closes after navigation", s.wait_gone(TITLE))
+
+        checks.check("layout tripwire never fired", not s.tripwire_fired())
+    return checks
 
 
-def wait_for(needle, timeout=4.0):
-    end = time.time() + timeout
-    while time.time() < end:
-        pump(0.3)
-        if needle in vt.text():
-            return True
-    return False
+def main(argv: list[str]) -> int:
+    wanted = argv or SCENARIOS
+    unknown = [a for a in wanted if a not in SCENARIOS]
+    if unknown:
+        print(f"unknown scenario(s): {', '.join(unknown)} — try {', '.join(SCENARIOS)}")
+        return 2
 
-
-def wait_gone(needle, timeout=4.0):
-    end = time.time() + timeout
-    while time.time() < end:
-        pump(0.3)
-        if needle not in vt.text():
-            return True
-    return False
-
-
-def type_text(s):
-    for ch in s:
-        os.write(fd, ch.encode())
-        time.sleep(0.03)
-
-
-try:
-    pump(2.5)
-    print(f"=== scenario: {SCENARIO} ({PROBE_COLS}x{PROBE_ROWS})")
-
-    type_text("/models")
-    pump(0.4)
-    os.write(fd, b"\r")
-    check("/models opens", wait_for(TITLE))
-
-    if SCENARIO == "compatible":
-        check(
-            "empty list explains itself",
-            wait_for("No models — reconnect with /login"),
-        )
-        check("cancel affordance is on screen", wait_for("Esc cancel"))
-
-    os.write(fd, b"\x1b")  # Esc
-    check("Esc closes the picker", wait_gone(TITLE))
-    check("prompt works after cancelling", wait_for("❯", 3.0))
-
-    # The picker must also stay closable when the list is empty and keys have
-    # already been pressed (selection/arrow state must not wedge the exit).
-    type_text("/models")
-    pump(0.4)
-    os.write(fd, b"\r")
-    check("reopened", wait_for(TITLE))
-    os.write(fd, b"\x1b[B")  # down
-    pump(0.3)
-    os.write(fd, b"\x1b")  # Esc
-    check("Esc still closes after navigation", wait_gone(TITLE))
-
-    stderr = b"".join(raw).decode("utf-8", "replace")
-    check(
-        "layout tripwire never fired",
-        "frame height" not in stderr and "direct-write" not in stderr,
-    )
+    failed = []
+    for name in wanted:
+        print(f"=== models/{name}")
+        checks = run_scenario(name)
+        print(checks.summary(), flush=True)
+        if not checks.ok:
+            failed.append(name)
 
     print()
-    failed = [n for n, ok in results if not ok]
-    print("ALL PASSED" if not failed else f"FAILED: {failed}")
-    sys.exit(1 if failed else 0)
-finally:
-    try:
-        os.kill(pid, signal.SIGKILL)
-        os.waitpid(pid, 0)
-    except (ProcessLookupError, ChildProcessError):
-        pass
-    shutil.rmtree(tmp, ignore_errors=True)
+    if failed:
+        print(f"FAILED scenarios: {', '.join(failed)}")
+        return 1
+    print(f"ALL PASSED ({len(wanted)} scenario{'s' if len(wanted) != 1 else ''})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

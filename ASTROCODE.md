@@ -13,6 +13,12 @@ conventions, build commands, and anything the agent should always know here.
 - `npm run build` — compile `src/` → `dist/`
 - `npm run dev` — run from source via `tsx`
 - `npm test` — `node:test` runner via `tsx --test tests/*.test.ts`
+- `npm run probe` — build + run every TUI PTY probe (`scripts/run_probes.py`);
+  needs Python 3. Probes boot the real `dist/index.js` in a pty and assert on
+  the rendered screen, so this is the only check that covers the
+  keystroke → Ink → frame path. It stops at the first failing probe. Any new
+  `scripts/probe_*.py` must be classified in `run_probes.py`
+  (ASSERTION_PROBES, or DIAGNOSTICS with a reason) or the gate fails.
 
 ## Conventions
 - Local imports use the `.js` extension (NodeNext resolution), e.g.
@@ -23,6 +29,13 @@ conventions, build commands, and anything the agent should always know here.
 - New slash commands go in `src/commands/slash.ts` (SLASH_COMMANDS + switch).
 - The TUI is rendered with Ink; keep layout math (heights) within the terminal.
 - Keep modules small and dependency-free; match the existing code style.
+- **New TUI behavior needs a probe**: unit tests cannot see a key that never
+  reaches a component or a frame that stops repainting. Extend an existing
+  `scripts/probe_*.py` (they share `scripts/pty_probe.py` — `Session` for the
+  pty + screen, `Checks` for PASS/FAIL), keep each probe's scenarios in its
+  module-level `SCENARIOS`/no-arg default so the gate runs all of them, and
+  never let a probe apply state to the developer's real config (the harness
+  points `ASTROCODE_CONFIG_DIR` at a temp dir).
 - **Popups are always cancellable**: every interactive popup (/login, /models,
   /settings, /theme) must handle Esc FIRST — before any early return for an
   empty list, a loading state, or anything else. /models once checked Esc after
