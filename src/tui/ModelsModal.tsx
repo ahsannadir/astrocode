@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme } from './theme.js';
 import { scrollWindow } from './layout.js';
+import { modelPickerIntent } from './modelPicker.js';
 import type { ProviderInfo } from '../providers.js';
 
 interface Props {
@@ -21,8 +22,9 @@ interface Props {
 /**
  * The /models popup — an opencode-style list of the connected provider's
  * models. ↑/↓ highlight (scrolling through long lists), Enter picks, Esc
- * cancels. The active model is marked ✓; free models (:free / -free suffix)
- * get a $0 tag.
+ * cancels (always — including when the provider has no models to list, which
+ * is the state an 'OpenAI Compatible' endpoint sits in). The active model is
+ * marked ✓; free models (:free / -free suffix) get a $0 tag.
  */
 export function ModelsModal({ provider, current, maxRows, onSelect, onCancel }: Props) {
   const models = provider.models;
@@ -33,31 +35,26 @@ export function ModelsModal({ provider, current, maxRows, onSelect, onCancel }: 
 
   useInput(
     (input, key) => {
-      if (models.length === 0) return;
-      if (key.upArrow) {
-        setSel((s) => (s - 1 + models.length) % models.length);
-        return;
-      }
-      if (key.downArrow) {
-        setSel((s) => (s + 1) % models.length);
-        return;
-      }
-      if (key.return) {
-        onSelect(models[sel]);
-        return;
-      }
-      if (key.escape) {
+      // Routing lives in modelPicker.ts: 'cancel' is decided BEFORE anything
+      // consults the model list, so the picker is escapable even when the
+      // provider offers no models at all (see tests/modelPicker.test.ts).
+      const intent = modelPickerIntent(models.length, input, key);
+      if (!intent) return;
+      if (intent.kind === 'cancel') {
         onCancel();
         return;
       }
-      // Type-ahead: jump to the first model starting with the typed char.
-      // Single printable characters only — multi-char input is a paste or an
-      // escape sequence fragment, never a navigation keystroke.
-      if (input.length === 1 && input.charCodeAt(0) >= 32) {
-        const ch = input.toLowerCase();
-        const idx = models.findIndex((m) => m.toLowerCase().startsWith(ch));
-        if (idx >= 0) setSel(idx);
+      if (intent.kind === 'move') {
+        setSel((s) => (s + intent.dir + models.length) % models.length);
+        return;
       }
+      if (intent.kind === 'select') {
+        onSelect(models[sel]);
+        return;
+      }
+      // Type-ahead: jump to the first model starting with the typed char.
+      const idx = models.findIndex((m) => m.toLowerCase().startsWith(intent.char));
+      if (idx >= 0) setSel(idx);
     },
     { isActive: true },
   );
@@ -69,6 +66,10 @@ export function ModelsModal({ provider, current, maxRows, onSelect, onCancel }: 
   const win = scrollWindow(models.length, sel, maxRows);
   const { count, start, hasMoreUp, hasMoreDown } = win;
   const visible = models.slice(start, start + count);
+  // Empty list: stand in a one-row notice for the entries. The layout budget
+  // charges this row (see computeLayout's modelsList), so the popup can never
+  // render taller than the height reserved for it.
+  const empty = models.length === 0;
 
   return (
     <Box borderStyle="double" borderColor={theme.promptSymbol} paddingX={1} flexDirection="column">
@@ -79,6 +80,9 @@ export function ModelsModal({ provider, current, maxRows, onSelect, onCancel }: 
         <Text color={theme.muted}>↑ {start} more…</Text>
       )}
       <Box flexDirection="column">
+        {empty ? (
+          <Text color={theme.muted}>No models — reconnect with /login</Text>
+        ) : null}
         {visible.map((m, i) => {
           const active = start + i === sel;
           const isCurrent = m === current;
@@ -105,7 +109,9 @@ export function ModelsModal({ provider, current, maxRows, onSelect, onCancel }: 
       {hasMoreDown && (
         <Text color={theme.muted}>↓ {models.length - start - count} more…</Text>
       )}
-      <Text color={theme.muted}>↑↓ navigate · Enter select · Esc cancel</Text>
+      <Text color={theme.muted}>
+        {empty ? 'Esc cancel · /model <name> sets one' : '↑↓ navigate · Enter select · Esc cancel'}
+      </Text>
     </Box>
   );
 }

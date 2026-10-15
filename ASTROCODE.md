@@ -23,6 +23,16 @@ conventions, build commands, and anything the agent should always know here.
 - New slash commands go in `src/commands/slash.ts` (SLASH_COMMANDS + switch).
 - The TUI is rendered with Ink; keep layout math (heights) within the terminal.
 - Keep modules small and dependency-free; match the existing code style.
+- **Popups are always cancellable**: every interactive popup (/login, /models,
+  /settings, /theme) must handle Esc FIRST — before any early return for an
+  empty list, a loading state, or anything else. /models once checked Esc after
+  bailing out on an empty model list, so an 'OpenAI Compatible' provider (its
+  models are fetched live during /login, never stored in the registry) trapped
+  the user in a popup that swallowed every keystroke. Key routing that carries
+  this kind of rule belongs in a pure helper (`src/tui/modelPicker.ts`) so a
+  test can pin it without a terminal. A popup that renders a row the layout
+  did not reserve (the empty-list notice) must reserve it in `computeLayout`
+  — under-reserving puts the frame on Ink's direct-write path and freezes it.
 
 ## Feature map (v1.3+)
 - **Swarm Mode** (`src/swarm.ts`, tool `swarm`, command `/swarm`): parallel

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme, THEMES, THEME_NAMES } from './theme.js';
 import { scrollWindow } from './layout.js';
+import { isPrintableChar } from './inputEdit.js';
 
 interface Props {
   /** The currently active theme name (gets a ✓ marker). */
@@ -49,8 +50,9 @@ export function ThemeModal({ current, maxRows, onSelect, onCancel }: Props) {
       }
       // Type-ahead: jump to the first theme starting with the typed char.
       // Single printable characters only — multi-char input is a paste or an
-      // escape sequence fragment, never a navigation keystroke.
-      if (input.length === 1 && input.charCodeAt(0) >= 32) {
+      // escape sequence fragment, and control bytes (DEL included) are never a
+      // navigation keystroke.
+      if (isPrintableChar(input)) {
         const idx = THEME_NAMES.findIndex((n) => n.startsWith(input.toLowerCase()));
         if (idx >= 0) setSel(idx);
       }

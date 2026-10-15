@@ -620,6 +620,32 @@ test('every popup can shrink to a single row without exceeding its budget', () =
   }
 });
 
+test('/models reserves the empty-list notice row', () => {
+  // ModelsModal stands a one-row "No models — reconnect with /login" notice
+  // in for the entries when the provider's registry list is empty (an 'OpenAI
+  // Compatible' endpoint). Reserving chrome alone under-reserved the popup by
+  // a row, which is exactly how a frame creeps onto the direct-write path.
+  for (const rows of [MIN_SUPPORTED_ROWS, 24, 33, 60, 200]) {
+    const l = computeLayout({
+      rows,
+      modal: 'models',
+      slashActive: false,
+      slashMatches: 0,
+      todoCount: 0,
+      approvalPending: false,
+      queueLength: 0,
+      modelsCount: 0,
+      themesCount: 12,
+      providersCount: 8,
+    });
+    assert.equal(l.modelsList.height, POPUP_CHROME_H.models + 1, `rows=${rows}`);
+    assert.equal(l.modelsList.cap, 1, `rows=${rows}`);
+    assert.equal(l.modalH, l.modelsList.height, `rows=${rows}`);
+    assert.ok(l.modalH >= popupMinHeight('models'), `rows=${rows}`);
+    assert.ok(l.fits, `rows=${rows} overflowed`);
+  }
+});
+
 test('the layout is pure — same input, same output', () => {
   const state: LayoutInput = {
     rows: 33,

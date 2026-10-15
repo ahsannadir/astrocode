@@ -345,7 +345,12 @@ function buildLayout(input: LayoutInput, bannerH: number): Layout {
     }
     return { cap: room, height: room + chrome, scrolls: true };
   };
-  const modelsList = popupList(input.modelsCount, MODELS_CHROME_H);
+  // /models never collapses to zero list rows: a provider with an empty
+  // registry list (an 'OpenAI Compatible' endpoint, whose models are fetched
+  // live during /login) renders a one-row "no models" notice in place of the
+  // entries. Reserving chrome alone would under-reserve that row by one — the
+  // exact way a frame creeps onto Ink's direct-write path.
+  const modelsList = popupList(Math.max(1, input.modelsCount), MODELS_CHROME_H);
   const themeList = popupList(input.themesCount, THEME_CHROME_H);
   const settingsList = popupList(SETTINGS_ROWS, SETTINGS_CHROME_H);
   // /login's second stage fetches its model list, so the two scroll-notice
