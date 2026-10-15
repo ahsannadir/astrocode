@@ -33,6 +33,12 @@ conventions, build commands, and anything the agent should always know here.
   test can pin it without a terminal. A popup that renders a row the layout
   did not reserve (the empty-list notice) must reserve it in `computeLayout`
   — under-reserving puts the frame on Ink's direct-write path and freezes it.
+- **/login remembers a configured custom endpoint**: the saved
+  'openai-compatible' config (`baseUrl`/`model` in the auth file) turns the
+  provider row into a two-choice prompt — "Use existing configuration" or
+  "Configure again" — instead of restarting the wizard. The branch and the
+  row set are pure helpers in `src/tui/loginFlow.ts` (`providerEntryStage`,
+  `existingCustomConfig`); reuse never rewrites the config file.
 
 ## Feature map (v1.3+)
 - **Swarm Mode** (`src/swarm.ts`, tool `swarm`, command `/swarm`): parallel

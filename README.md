@@ -66,6 +66,11 @@ implements `POST /chat/completions` — AstroCode pulls the model list from
 `GET <baseUrl>/models`, and keyless local endpoints run fully live (no demo
 mode needed).
 
+Once an **OpenAI Compatible** endpoint is saved, picking it in `/login` again
+asks first: **Use existing configuration** reconnects with the saved base URL,
+key and model, while **Configure again** reopens the wizard. Nothing is
+rewritten unless you complete the wizard.
+
 If you'd rather not use the popup:
 
 ```bash

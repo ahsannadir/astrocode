@@ -5,6 +5,13 @@ import { scrollWindow } from './layout.js';
 import { PROVIDERS } from '../providers.js';
 import { listModels } from '../ai/openai.js';
 import { backspaceAt, deleteWordBefore, insertAtCursor } from './inputEdit.js';
+import {
+  moveReuseSel,
+  providerEntryStage,
+  reuseRowAt,
+  REUSE_ROWS,
+  type ExistingCustomConfig,
+} from './loginFlow.js';
 
 export interface LoginMeta {
   /** Base URL for the 'openai-compatible' provider. */
@@ -23,6 +30,14 @@ interface Props {
    * it, so neither stage can outgrow the modal's reservation.
    */
   maxRows?: number;
+  /**
+   * The 'OpenAI Compatible' endpoint saved by an earlier /login. When set,
+   * picking that provider asks whether to reuse it instead of restarting the
+   * base URL → key → model wizard (see loginFlow.ts).
+   */
+  existing?: ExistingCustomConfig | null;
+  /** Reconnect with `existing` and close the popup. */
+  onUseExisting?: () => void;
 }
 
 const CUSTOM_MODEL_LABEL = '✎ Create custom model ID…';
@@ -38,15 +53,18 @@ const ellipsize = (s: string, max = 90) =>
  * The /login popup — an opencode-style staged screen:
  *   1. "Select a provider" — ↑/↓ highlight, Enter picks.
  *   2a. Regular providers: "Enter your API key" — type, Enter saves, Esc back.
- *   2b. 'OpenAI Compatible': Base URL → optional API key → live model list
- *       fetched from GET <baseUrl>/models, with a trailing "Create custom
- *       model ID" entry for endpoints that don't expose the list.
+ *   2b. 'OpenAI Compatible': when an endpoint is already saved, a two-row
+ *       prompt ("Use existing configuration" / "Configure again") first, then
+ *       Base URL → optional API key → live model list fetched from
+ *       GET <baseUrl>/models, with a trailing "Create custom model ID" entry
+ *       for endpoints that don't expose the list.
  * Rendered in place of the prompt while open; the prompt input is disabled.
  */
-export function LoginModal({ onComplete, onCancel, maxRows }: Props) {
+export function LoginModal({ onComplete, onCancel, maxRows, existing, onUseExisting }: Props) {
   const [stage, setStage] = useState<
-    'providers' | 'baseurl' | 'key' | 'models' | 'custom-model'
+    'providers' | 'existing' | 'baseurl' | 'key' | 'models' | 'custom-model'
   >('providers');
+  const [existingSel, setExistingSel] = useState(0);
   const [sel, setSel] = useState(0);
   const [baseUrlText, setBaseUrlText] = useState('');
   const [urlError, setUrlError] = useState('');
@@ -138,11 +156,37 @@ export function LoginModal({ onComplete, onCancel, maxRows }: Props) {
         if (key.return) {
           setUrlError('');
           setKeyText('');
-          setStage(PROVIDERS[sel].id === 'openai-compatible' ? 'baseurl' : 'key');
+          // Custom endpoint already saved → offer to reuse it before making
+          // the user retype the base URL, key and model.
+          const next = providerEntryStage(PROVIDERS[sel].id, !!existing);
+          if (next === 'existing') setExistingSel(0);
+          setStage(next);
           return;
         }
         if (key.escape) {
           onCancel();
+          return;
+        }
+        return;
+      }
+
+      if (stage === 'existing') {
+        // Esc always backs out to the provider list (never a dead end).
+        if (key.escape || !existing) {
+          setStage('providers');
+          return;
+        }
+        if (key.upArrow) {
+          setExistingSel((s) => moveReuseSel(s, -1));
+          return;
+        }
+        if (key.downArrow) {
+          setExistingSel((s) => moveReuseSel(s, 1));
+          return;
+        }
+        if (key.return) {
+          if (reuseRowAt(existingSel) === 'use-existing') onUseExisting?.();
+          else setStage('baseurl');
           return;
         }
         return;
@@ -281,6 +325,43 @@ export function LoginModal({ onComplete, onCancel, maxRows }: Props) {
           <Text color={theme.muted}>↓ {PROVIDERS.length - start - count} more…</Text>
         )}
         <Text color={theme.muted}>↑↓ navigate · Enter select · Esc cancel</Text>
+      </Box>
+    );
+  }
+
+  if (stage === 'existing' && existing) {
+    // Endpoint + model on their own line so neither option row can wrap (a
+    // wrapped row would render taller than the height App reserved).
+    const saved = `${existing.baseUrl}${existing.model ? `  ·  ${existing.model}` : ''}`;
+    return (
+      <Box borderStyle="double" borderColor={theme.promptSymbol} paddingX={1} flexDirection="column">
+        <Text color={theme.title} bold>
+          🔌 OpenAI Compatible — already configured
+        </Text>
+        <Text color={theme.muted} dimColor>
+          {ellipsize(saved, 70)}
+        </Text>
+        <Box flexDirection="column">
+          {REUSE_ROWS.map((row, i) => {
+            const active = i === existingSel;
+            return (
+              <Box key={row} flexDirection="row">
+                <Text color={active ? theme.promptSymbol : theme.muted} bold={active}>
+                  {active ? '❯' : ' '}
+                </Text>
+                <Text color={active ? theme.prompt : theme.muted} bold={active}>
+                  {' '}
+                  {row === 'use-existing' ? '✓ Use existing configuration' : '⟳ Configure again'}
+                </Text>
+                <Text color={theme.muted}>
+                  {'  —  '}
+                  {row === 'use-existing' ? 'reconnect as-is' : 're-enter base URL, key, model'}
+                </Text>
+              </Box>
+            );
+          })}
+        </Box>
+        <Text color={theme.muted}>↑↓ navigate · Enter select · Esc back</Text>
       </Box>
     );
   }

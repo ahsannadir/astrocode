@@ -45,6 +45,7 @@ import type { CompactResult } from '../compact.js';
 import type { ApprovalMode } from '../approval.js';
 import type { AIProvider } from '../types.js';
 import { loadAuth, saveAuth, authFilePath, type AuthConfig } from '../auth.js';
+import { existingCustomConfig, type ExistingCustomConfig } from './loginFlow.js';
 import { copyToClipboard } from '../clipboard.js';
 import { providerById, PROVIDERS } from '../providers.js';
 import { connectAllMcp, disconnectAllMcp, mcpServerNames } from '../mcp.js';
@@ -96,6 +97,11 @@ export function App({ config, cwd }: Props) {
   const [, setTodoVersion] = useState(0);
   // ---- interactive popups (/login, /models, /settings, /theme) + copy mode ----
   const [modal, setModal] = useState<null | 'login' | 'models' | 'settings' | 'theme'>(null);
+  // The 'OpenAI Compatible' endpoint saved by an earlier /login, snapshot when
+  // the popup opens (not every render — the tick animation re-renders often
+  // and loadAuth() hits the disk). It is what /login offers to reuse instead
+  // of restarting the base URL → key → model wizard.
+  const [savedCustom, setSavedCustom] = useState<ExistingCustomConfig | null>(null);
   const [themeName, setThemeName] = useState('astro');
   const [copyMode, setCopyMode] = useState(false);
   // ---- shell approval (run_command gating) ----
@@ -429,6 +435,47 @@ export function App({ config, cwd }: Props) {
     },
     [pushItem, setModel],
   );
+
+  /**
+   * Open the /login popup. The saved custom endpoint is re-read from disk here
+   * so a config written earlier in this session (or by another window) is
+   * offered for reuse rather than a stale snapshot from startup.
+   */
+  const openLogin = useCallback(() => {
+    setSavedCustom(existingCustomConfig(loadAuth()));
+    setModal('login');
+  }, []);
+
+  /**
+   * "Use existing configuration": keep the saved custom endpoint, key and
+   * model exactly as they are, reconnect and close. Nothing is rewritten —
+   * this is the no-op-free path for someone who only wanted to confirm which
+   * endpoint they are on.
+   */
+  const handleUseExistingCustom = useCallback(() => {
+    const stored = loadAuth();
+    const baseUrl = stored?.baseUrl || configRef.current.baseUrl;
+    const model = stored?.model || configRef.current.model;
+    configRef.current = {
+      ...configRef.current,
+      provider: 'openai-compatible',
+      apiKey: stored?.apiKey ?? configRef.current.apiKey,
+      baseUrl,
+      model,
+      demo: false,
+    };
+    setProviderId('openai-compatible');
+    setConnected(true);
+    setModel(model);
+    setModal(null);
+    pushItem({
+      kind: 'system',
+      text:
+        `🔌 Using your saved OpenAI Compatible configuration — ${baseUrl}` +
+        `${model ? ` · model ${model}` : ''}.\n` +
+        `Re-run /login and pick "Configure again" to change the endpoint or model.`,
+    });
+  }, [pushItem, setModel]);
 
   /** /models completion: switch model now and persist it for next launch. */
   const handleModelSelect = useCallback(
@@ -780,7 +827,7 @@ export function App({ config, cwd }: Props) {
           });
         }
         if (res.login) {
-          setModal('login');
+          openLogin();
         }
         if (res.models) {
           setModal('models');
@@ -820,7 +867,7 @@ export function App({ config, cwd }: Props) {
       convRef.current.push({ role: 'user', content: value });
       await runAgentRef.current?.();
     },
-    [pushItem, setModel, setModal, exit, runAgentRef, sessionName, cwd, contextTokens, setSessionName, enqueuePrompt],
+    [pushItem, setModel, setModal, exit, runAgentRef, sessionName, cwd, contextTokens, setSessionName, enqueuePrompt, openLogin],
   );
 
   /**
@@ -1287,6 +1334,8 @@ export function App({ config, cwd }: Props) {
               onComplete={handleLoginComplete}
               onCancel={() => setModal(null)}
               maxRows={loginList.cap}
+              existing={savedCustom}
+              onUseExisting={handleUseExistingCustom}
             />
           ) : modal === 'models' ? (
             <ModelsModal
@@ -1322,7 +1371,7 @@ export function App({ config, cwd }: Props) {
               onCycleTurns={handleCycleTurns}
               onCycleBudget={handleCycleBudget}
               onPickModel={() => setModal('models')}
-              onPickProvider={() => setModal('login')}
+              onPickProvider={openLogin}
               onCancel={() => setModal(null)}
             />
           )}
