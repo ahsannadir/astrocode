@@ -539,6 +539,17 @@ export function App({ config, cwd }: Props) {
     [],
   );
 
+  /**
+   * /theme live preview: repaint in the highlighted palette as the user
+   * scrolls, without persisting. The parent owns the applied name so the
+   * state change re-renders the whole tree (the `theme` singleton is mutated
+   * in place, which on its own would only repaint the modal).
+   */
+  const handleThemePreview = useCallback((name: string) => {
+    setTheme(name);
+    setThemeName(name);
+  }, []);
+
   /** /theme completion: apply the palette now and persist for next launch. */
   const handleThemeSelect = useCallback(
     (name: string) => {
@@ -1349,6 +1360,7 @@ export function App({ config, cwd }: Props) {
             <ThemeModal
               current={themeName}
               maxRows={themeList.cap}
+              onPreview={handleThemePreview}
               onSelect={handleThemeSelect}
               onCancel={() => setModal(null)}
             />

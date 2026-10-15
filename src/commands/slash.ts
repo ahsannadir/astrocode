@@ -212,7 +212,8 @@ Tips
 • Type /login to connect OpenAI, Anthropic, InferX, AgentRouter, ZenMux, TokenRouter, or OpenRouter with an interactive popup.
 • Type /models to pick a model from your connected provider.
 • Type /settings to open the settings menu (mode, verify, auto-commit, turns, budget).
-• Type /theme to pick a color theme (persists across launches; ASTROCODE_THEME env wins).
+• Type /theme to pick a color theme — ↑/↓ previews it live, Enter applies, Esc reverts
+  (choice persists across launches; ASTROCODE_THEME env wins).
 • Select & copy: your terminal's native mouse selection works here too (drag + Ctrl+Shift+C / Cmd+C).
 • Ctrl+K selects & copies clean text (no prefixes/chrome); /copy copies the last reply (or "all").
 • Type normally to chat with the agent; it streams responses live.

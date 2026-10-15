@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { theme, THEMES, THEME_NAMES } from './theme.js';
 import { scrollWindow } from './layout.js';
@@ -12,6 +12,11 @@ interface Props {
    * it, so the modal never outgrows its reservation (terminal-height aware).
    */
   maxRows?: number;
+  /**
+   * Called with the highlighted theme name as the selection moves, so the
+   * whole UI repaints in that palette before the user commits (live preview).
+   */
+  onPreview: (name: string) => void;
   /** Called with the chosen theme name when the user confirms. */
   onSelect: (name: string) => void;
   onCancel: () => void;
@@ -20,15 +25,37 @@ interface Props {
 /**
  * The /theme popup — an opencode-style list of palettes. Each row shows the
  * theme's own colors as a small swatch, so you see the palette before picking.
- * ↑/↓ highlight (scrolling through long lists), Enter applies, Esc cancels;
+ * ↑/↓ highlight (scrolling through long lists), Enter applies, Esc reverts;
  * typing a letter jumps to it.
+ *
+ * Moving the highlight previews the palette LIVE: the parent applies it on
+ * every change, so the banner, transcript and status bar repaint in the
+ * highlighted theme as you scroll. Esc restores the theme that was live when
+ * the popup opened, so a previewed-but-unconfirmed palette never sticks.
  */
-export function ThemeModal({ current, maxRows, onSelect, onCancel }: Props) {
+export function ThemeModal({ current, maxRows, onPreview, onSelect, onCancel }: Props) {
   const [sel, setSel] = useState(() => {
     const idx = THEME_NAMES.indexOf(current);
     return idx >= 0 ? idx : 0;
   });
   const nameW = Math.max(...THEME_NAMES.map((n) => n.length));
+  // The palette that was live when the popup opened (initial `current`); the
+  // ref keeps it stable because `current` follows the live preview.
+  const originRef = useRef(current);
+
+  // Live preview: every highlight move (arrows, type-ahead, wrap-around)
+  // repaints the app in the highlighted palette. The parent holds the applied
+  // name in state, so this also re-renders the rest of the tree — the mutated
+  // `theme` singleton alone would only repaint the modal.
+  useEffect(() => {
+    onPreview(THEME_NAMES[sel]);
+  }, [sel, onPreview]);
+
+  /** Esc: put the original palette back before closing the popup. */
+  const cancel = () => {
+    onPreview(originRef.current);
+    onCancel();
+  };
 
   useInput(
     (input, key) => {
@@ -45,7 +72,7 @@ export function ThemeModal({ current, maxRows, onSelect, onCancel }: Props) {
         return;
       }
       if (key.escape) {
-        onCancel();
+        cancel();
         return;
       }
       // Type-ahead: jump to the first theme starting with the typed char.
@@ -104,7 +131,7 @@ export function ThemeModal({ current, maxRows, onSelect, onCancel }: Props) {
       {hasMoreDown && (
         <Text color={theme.muted}>↓ {THEME_NAMES.length - start - count} more…</Text>
       )}
-      <Text color={theme.muted}>↑↓ navigate · Enter apply · Esc cancel</Text>
+      <Text color={theme.muted}>↑↓ preview live · Enter apply · Esc revert</Text>
     </Box>
   );
 }

@@ -46,6 +46,15 @@ conventions, build commands, and anything the agent should always know here.
   test can pin it without a terminal. A popup that renders a row the layout
   did not reserve (the empty-list notice) must reserve it in `computeLayout`
   — under-reserving puts the frame on Ink's direct-write path and freezes it.
+- **/theme previews the palette LIVE**: the picker's highlight IS the applied
+  theme. `ThemeModal` reports every selection change through `onPreview`, and
+  App runs `setTheme` AND `setThemeName` together — mutating the `theme`
+  singleton alone only repaints the modal, because nothing above it
+  re-renders. Esc re-applies the palette captured when the popup opened
+  (`originRef`) so a preview never sticks, and only Enter persists `theme` to
+  config.json. `scripts/probe_modals.py` pins both halves at the byte level:
+  the banner wordmark's SGR code (theme.ascii) flips cyan→blue on ↓ and back
+  on Esc, and the config file stays untouched until Enter.
 - **/login remembers a configured custom endpoint**: the saved
   'openai-compatible' config (`baseUrl`/`model` in the auth file) turns the
   provider row into a two-choice prompt — "Use existing configuration" or

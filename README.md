@@ -267,7 +267,8 @@ terminal cells, so CJK text and emoji wrap where they should. On top of that a
 live status bar (mode, model, context %, tasks, spend, branch, cwd), a task
 panel the agent keeps updated via the `todo` tool, and real modals for
 `/login`, `/models`, `/settings`, and `/theme`. Twelve color themes, each with
-its own syntax palette. Your terminal's native mouse selection works, and
+its own syntax palette — scrolling `/theme` previews them live in the whole UI,
+and Esc puts the previous theme back. Your terminal's native mouse selection works, and
 `Ctrl+K` copies clean text without banners or prefixes; `/copy` grabs the last
 reply. If stdout isn't a TTY (CI, a pipe), it prints a banner and exits instead
 of crashing.
