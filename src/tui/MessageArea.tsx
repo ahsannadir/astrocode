@@ -4,9 +4,9 @@ import { theme, spinnerFrames } from './theme.js';
 import {
   richLines,
   wrapText,
-  fitLine,
   type UILine,
 } from './markdown.js';
+import { formatToolCall } from './toolFormat.js';
 
 export type { UISegment } from './markdown.js';
 
@@ -110,25 +110,15 @@ function flatten(items: UIItem[], width: number, tick: number): UILine[] {
         lines.push({ text: '' });
         break;
       case 'tool_start': {
-        // `☄ name` in the tool color with the (compact) JSON args trailing
-        // in muted text on the same line when it fits, else truncated.
-        let snippet = item.args;
-        try {
-          snippet = JSON.stringify(JSON.parse(item.args));
-        } catch {
-          // keep the raw string — still bound below
+        // Render the call the way a human reads it: the tool name plus a
+        // path/command/diff, with the payload as real wrapped, highlighted
+        // lines underneath — instead of a single truncated JSON blob.
+        for (const l of formatToolCall(item.name, item.args, width)) {
+          lines.push({ ...l, copy: l.copy ?? '' });
         }
-        const label = `☄ ${item.name}`;
-        const maxSnippet = Math.max(10, width - label.length - 2);
-        if (snippet.length > maxSnippet) snippet = snippet.slice(0, maxSnippet) + '…';
-        lines.push({
-          text: fitLine(`${label} ${snippet}`, width),
-          copy: '',
-          segments: [
-            { text: label, color: theme.toolName },
-            { text: ` ${snippet}`, color: theme.muted },
-          ],
-        });
+        if (lines.length > 0 && lines[lines.length - 1].text !== '') {
+          lines.push({ text: '' });
+        }
         break;
       }
       case 'tool_result': {
