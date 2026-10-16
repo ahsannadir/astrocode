@@ -1,7 +1,7 @@
 {
   "name": "astrocode",
   "version": "1.3.0",
-  "description": "AstroCode — a fully-fledged AI terminal coding agent with a stunning TUI",
+  "description": "AstroCode — a fast terminal coding agent: 16 tools, sub-agents, and swarm mode, on exactly two dependencies.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

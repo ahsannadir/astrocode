@@ -1,4 +1,14 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/astrobanner-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/astrobanner.png">
+    <img alt="AstroCode — a fast terminal coding agent" src="assets/astrobanner.png">
+  </picture>
+</p>
+
 # AstroCode
+
+**A fast terminal coding agent: 16 tools, sub-agents, and swarm mode, on exactly two dependencies.**
 
 AstroCode is a coding agent that lives in your terminal. Describe a task, and
 it reads your repo, edits files, runs commands, and keeps going until the job
