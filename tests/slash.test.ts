@@ -1,5 +1,5 @@
 /**
- * Unit tests for slash-command handlers that touch the clipboard (/copy).
+ * Unit tests for slash-command handling and the "/" menu.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,22 +17,6 @@ function cmd(name: string) {
   const c = SLASH_COMMANDS.find((x) => x.name === name);
   assert.ok(c, `${name} exists in SLASH_COMMANDS`);
   return c!;
-}
-
-/** Capture OSC 52 writes so tests never touch a real clipboard. */
-async function captureStdout(fn: () => Promise<void> | void): Promise<string> {
-  const orig = process.stdout.write;
-  let captured = '';
-  (process.stdout as unknown as { write: unknown }).write = ((chunk: unknown) => {
-    captured += String(chunk);
-    return true;
-  }) as typeof process.stdout.write;
-  try {
-    await fn();
-  } finally {
-    (process.stdout as unknown as { write: unknown }).write = orig;
-  }
-  return captured;
 }
 
 function makeCtx(messages: SlashContext['messages']): SlashContext {
@@ -119,38 +103,6 @@ test('SLASH_SAFE_WHILE_BUSY: every entry is a real, informational command', () =
   assert.equal(SLASH_SAFE_WHILE_BUSY.has('/plan'), false);
 });
 
-test('/copy: copies the last assistant reply via OSC 52', async () => {
-  const ctx = makeCtx([
-    { role: 'user', content: 'hello' },
-    { role: 'assistant', content: 'hi there, operator' },
-    { role: 'user', content: 'again' },
-    { role: 'assistant', content: 'second reply' },
-  ]);
-  const out = await captureStdout(async () => {
-    const res = await runSlashCommand('/copy', ctx);
-    assert.equal(res.handled, true);
-    assert.ok(res.message!.includes('Copied the last reply'));
-  });
-  const b64 = Buffer.from('second reply', 'utf8').toString('base64');
-  assert.ok(out.includes(b64), 'OSC 52 payload contains the last reply');
-});
-
-test('/copy all: joins user + assistant content', async () => {
-  const ctx = makeCtx([
-    { role: 'user', content: 'q1' },
-    { role: 'assistant', content: 'a1' },
-    { role: 'user', content: 'q2' },
-    { role: 'assistant', content: 'a2' },
-  ]);
-  const out = await captureStdout(async () => {
-    const res = await runSlashCommand('/copy all', ctx);
-    assert.equal(res.handled, true);
-    assert.ok(res.message!.includes('Copied the conversation'));
-  });
-  const b64 = Buffer.from('q1\n\na1\n\nq2\n\na2', 'utf8').toString('base64');
-  assert.ok(out.includes(b64), 'OSC 52 payload contains the joined transcript');
-});
-
 test('/commit: passes a custom message through (not just a boolean flag)', async () => {
   const ctx = makeCtx([]);
   const withMsg = await runSlashCommand('/commit fix: tidy the parser', ctx);
@@ -165,12 +117,23 @@ test('/commit: passes a custom message through (not just a boolean flag)', async
   assert.notEqual(noMsg.autocommit, undefined);
 });
 
-test('/copy: no assistant reply yet → helpful message, no clipboard write', async () => {
-  const ctx = makeCtx([{ role: 'user', content: 'only a question' }]);
-  const out = await captureStdout(async () => {
-    const res = await runSlashCommand('/copy', ctx);
-    assert.equal(res.handled, true);
-    assert.ok(res.message!.includes('No assistant reply'));
-  });
-  assert.equal(out, '', 'no clipboard write happened');
+test('/quit and /copy are no longer commands', async () => {
+  const names = new Set(SLASH_COMMANDS.map((c) => c.name));
+  assert.equal(names.has('/quit'), false);
+  assert.equal(names.has('/copy'), false);
+
+  const ctx = makeCtx([]);
+  for (const removed of ['/quit', '/copy', '/copy all']) {
+    const res = await runSlashCommand(removed, ctx);
+    assert.equal(res.handled, true, `${removed} is handled as unknown`);
+    assert.equal(res.exit, undefined);
+    assert.ok(res.message!.includes('Unknown slash command'), `${removed} → unknown command`);
+  }
+});
+
+test('/exit quits the app', async () => {
+  const ctx = makeCtx([]);
+  const res = await runSlashCommand('/exit', ctx);
+  assert.equal(res.handled, true);
+  assert.equal(res.exit, true);
 });

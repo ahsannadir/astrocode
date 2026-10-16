@@ -45,7 +45,7 @@ EXAMPLES
   astrocode serve   # then point any MCP client (e.g. Claude Code) at it
 
 SLASH COMMANDS
-  /help /copy /login /models /settings /theme /model /plan /act /clear /save
+  /help /login /models /settings /theme /model /plan /act /clear /save
   /load /sessions /new /undo /rewind /review /verify /commit /cost /tools
   /agents /swarm /mcp /skills /recall /compact /context /memory /map /todo
   /status /stars /whoami /delete /exit`;

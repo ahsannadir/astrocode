@@ -121,8 +121,7 @@ Getting around:
 | `/settings`, `/theme` | Settings menu; color themes (12 palettes) |
 | `/plan`, `/act`, `/mode` | Switch modes, show the current one |
 | `/clear`, `/new` | Start a fresh conversation |
-| `/copy [all]` | Copy the last reply or the whole conversation |
-| `/exit` | Quit (also `/quit` or `Ctrl+C`) |
+| `/exit` | Quit (also `Ctrl+C`) |
 
 Sessions, memory, context:
 
@@ -269,8 +268,8 @@ panel the agent keeps updated via the `todo` tool, and real modals for
 `/login`, `/models`, `/settings`, and `/theme`. Twelve color themes, each with
 its own syntax palette — scrolling `/theme` previews them live in the whole UI,
 and Esc puts the previous theme back. Your terminal's native mouse selection works, and
-`Ctrl+K` copies clean text without banners or prefixes; `/copy` grabs the last
-reply. If stdout isn't a TTY (CI, a pipe), it prints a banner and exits instead
+`Ctrl+K` copies clean text without banners or prefixes.
+If stdout isn't a TTY (CI, a pipe), it prints a banner and exits instead
 of crashing.
 
 ## Configuration

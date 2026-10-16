@@ -136,7 +136,7 @@ conventions, build commands, and anything the agent should always know here.
 - **Rendering is centralized** in `src/tui/markdown.ts` (pure + tested in
   `tests/markdown.test.ts`; highlighter in `tests/syntax.test.ts`). Add new
   block types there rather than inline in a component, and give every
-  non-chrome `UILine` a `copy` string so `/copy` and Ctrl+K selection stay
+  non-chrome `UILine` a `copy` string so Ctrl+K selection stays
   clean (code copies without its gutter; frames/rules set `copy: ''`).
 - **New syntax languages land in the highlighter, not the renderer**: add a
   `LangSpec` (keywords/builtins/sigils/comments/quotes) or a small scanner in

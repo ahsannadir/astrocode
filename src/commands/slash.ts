@@ -16,7 +16,6 @@ import { SUBAGENT_ROLES, SUBAGENT_ROLE_NAMES } from '../subagent.js';
 import { getAgentHistory } from '../agents.js';
 import { recallSessions } from '../recall.js';
 import { detectScripts, runVerify, autoCommit } from '../verify.js';
-import { copyToClipboard } from '../clipboard.js';
 import { lastSwarmSummary, swarmCleanup } from '../swarm.js';
 
 export interface SlashCommandDef {
@@ -83,7 +82,6 @@ export interface SlashContext {
 
 export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: '/help', description: 'Show this help', usage: '/help' },
-  { name: '/copy', description: 'Copy the last reply (or "all") to the clipboard', usage: '/copy [all]' },
   { name: '/login', description: 'Connect an AI provider (OpenAI · Anthropic · InferX · AgentRouter · ZenMux · TokenRouter · OpenRouter · OpenAI Compatible)', usage: '/login' },
   { name: '/models', description: 'Pick a model from the connected provider', usage: '/models' },
   { name: '/settings', description: 'Open the settings menu', usage: '/settings' },
@@ -126,8 +124,7 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: '/verify', description: 'Run lint/test on your changes', usage: '/verify' },
   { name: '/commit', description: 'Auto-commit current changes', usage: '/commit [msg]' },
   { name: '/context', description: 'Show context-window usage', usage: '/context' },
-  { name: '/exit', description: 'Quit AstroCode', usage: '/exit or /quit' },
-  { name: '/quit', description: 'Quit AstroCode', usage: '/quit' },
+  { name: '/exit', description: 'Quit AstroCode', usage: '/exit' },
 ];
 
 /**
@@ -137,7 +134,6 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
  */
 export const SLASH_SAFE_WHILE_BUSY: ReadonlySet<string> = new Set([
   '/help',
-  '/copy',
   '/cost',
   '/mode',
   '/status',
@@ -215,7 +211,7 @@ Tips
 • Type /theme to pick a color theme — ↑/↓ previews it live, Enter applies, Esc reverts
   (choice persists across launches; ASTROCODE_THEME env wins).
 • Select & copy: your terminal's native mouse selection works here too (drag + Ctrl+Shift+C / Cmd+C).
-• Ctrl+K selects & copies clean text (no prefixes/chrome); /copy copies the last reply (or "all").
+• Ctrl+K selects & copies clean text (no prefixes/chrome).
 • Type normally to chat with the agent; it streams responses live.
 • The agent uses tools (read/write/edit/list/search/git, run commands) autonomously.
 • While the agent runs: Enter QUEUES your prompt · Esc INTERRUPTS the turn.
@@ -235,46 +231,6 @@ export async function runSlashCommand(
   switch (cmd.toLowerCase()) {
     case '/help':
       return { handled: true, message: HELP_TEXT };
-    case '/copy': {
-      const wantAll = arg.toLowerCase() === 'all';
-      const assistants = ctx.messages.filter(
-        (m) => m.role === 'assistant' && typeof m.content === 'string' && m.content,
-      );
-      const last = assistants[assistants.length - 1];
-      if (wantAll) {
-        const body = ctx.messages
-          .filter(
-            (m) =>
-              (m.role === 'user' || m.role === 'assistant') &&
-              typeof m.content === 'string' &&
-              m.content,
-          )
-          .map((m) => m.content)
-          .join('\n\n');
-        if (!body) {
-          return { handled: true, message: 'Nothing to copy — the conversation is empty.' };
-        }
-        const res = copyToClipboard(body);
-        return {
-          handled: true,
-          message:
-            res === 'failed'
-              ? 'Could not copy — no clipboard support available.'
-              : `Copied the conversation (${body.length} chars) to the clipboard.`,
-        };
-      }
-      if (!last?.content) {
-        return { handled: true, message: 'No assistant reply to copy yet.' };
-      }
-      const res = copyToClipboard(last.content);
-      return {
-        handled: true,
-        message:
-          res === 'failed'
-            ? 'Could not copy — no clipboard support available.'
-            : `Copied the last reply (${last.content.length} chars) to the clipboard.`,
-      };
-    }
     case '/login':
       return { handled: true, login: true };
     case '/models':
@@ -662,7 +618,6 @@ export async function runSlashCommand(
       };
     }
     case '/exit':
-    case '/quit':
       return { handled: true, exit: true };
     default:
       return {
