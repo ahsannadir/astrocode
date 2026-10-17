@@ -9,9 +9,9 @@
 # AstroCode
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/astrocode"><img alt="npm version" src="https://img.shields.io/badge/npm-v2026.10.4-blue"></a>
-  <a href="https://nodejs.org"><img alt="node version" src="https://img.shields.io/badge/node-%3E%3D24.16.0%20%3C25%20%7C%7C%20%3E%3D26.1.0-green"></a>
-  <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-green">
+  <a href="https://www.npmjs.com/package/astrocode"><img alt="npm version" src="https://img.shields.io/npm/v/astrocode?label=npm&color=blue"></a>
+  <a href="https://nodejs.org"><img alt="node engine" src="https://img.shields.io/node/v/astrocode?label=node"></a>
+  <a href="https://www.npmjs.com/package/astrocode"><img alt="license: MIT" src="https://img.shields.io/npm/l/astrocode?label=license"></a>
 </p>
 
 **A fast terminal coding agent: sub-agents, and swarm mode, on exactly two dependencies.**
