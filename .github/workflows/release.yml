@@ -29,23 +29,43 @@ jobs:
       - run: npm test
 
       # `prepack` builds dist/; `prepublishOnly` re-runs the checks.
+      # A re-run of a tag that already published must not fail on npm's
+      # "cannot publish over the previously published version".
+      - name: Is this version already on the registry?
+        id: registry
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if npm view "astrocode@${VERSION}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "astrocode@${VERSION} is already published — skipping."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish
+        if: steps.registry.outputs.published == 'false'
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # Optional: keep the Homebrew tap in sync. Requires a TAP_GITHUB_TOKEN secret
-  # with write access to ahsannadir/homebrew-tap.
+  # with write access to ahsannadir/homebrew-tap; without it the job is a no-op
+  # so an unconfigured tap can't redden an otherwise good release.
   bump-tap:
     name: Bump Homebrew tap
     needs: publish
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'ahsannadir' }}
+    env:
+      TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        if: env.TAP_TOKEN != ''
 
       - name: Compute the published tarball sha256
         id: sha
+        if: env.TAP_TOKEN != ''
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
@@ -61,6 +81,7 @@ jobs:
           echo "sha256=$SHA"    >> "$GITHUB_OUTPUT"
 
       - name: Render the formula
+        if: env.TAP_TOKEN != ''
         env:
           VERSION: ${{ steps.sha.outputs.version }}
           SHA: ${{ steps.sha.outputs.sha256 }}
@@ -74,6 +95,7 @@ jobs:
           grep -q "${SHA}" formula.rb
 
       - name: Push the formula to the tap
+        if: env.TAP_TOKEN != ''
         env:
           GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           VERSION: ${{ steps.sha.outputs.version }}
