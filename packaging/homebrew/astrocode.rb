@@ -21,8 +21,8 @@
 class Astrocode < Formula
   desc "Fast terminal coding agent with 16 tools, sub-agents, and swarm mode"
   homepage "https://github.com/ahsannadir/astrocode"
-  url "https://registry.npmjs.org/astrocode/-/astrocode-1.3.0.tgz"
-  sha256 "c3fa5737f67347150c75b62ca562ae17fb9232408886581f810e5084a270c540"
+  url "https://registry.npmjs.org/astrocode/-/astrocode-1.3.2.tgz"
+  sha256 "968e26756b8710a34c03afc24b60c4d30d90b065615ea8403f36ed21941430f4"
   license "MIT"
 
   depends_on "node"
