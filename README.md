@@ -1,17 +1,18 @@
-<p align="center">  
-  <picture>  
-    <source media="(prefers-color-scheme: dark)" srcset="assets/astrobanner-dark.png">  
-    <source media="(prefers-color-scheme: light)" srcset="assets/astrobanner.png">  
-    <img alt="AstroCode — a fast terminal coding agent" src="assets/astrobanner.png">  
-  </picture>  
+<p align="center">    
+  <picture>    
+    <source media="(prefers-color-scheme: dark)" srcset="assets/astrobanner-dark.png">    
+    <source media="(prefers-color-scheme: light)" srcset="assets/astrobanner.png">    
+    <img alt="AstroCode — a fast terminal coding agent" src="assets/astrobanner.png">    
+  </picture>    
 </p>
+
 
 # AstroCode
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/astrocode"><img alt="npm version" src="https://img.shields.io/npm/v/astrocode?label=npm&color=blue"></a>
-  <a href="https://nodejs.org"><img alt="node engine" src="https://img.shields.io/node/v/astrocode?label=node"></a>
-  <a href="https://www.npmjs.com/package/astrocode"><img alt="license: MIT" src="https://img.shields.io/npm/l/astrocode?label=license"></a>
+<p align="center">  
+  <a href="https://www.npmjs.com/package/astrocode"><img alt="npm version" src="https://img.shields.io/npm/v/astrocode?label=npm&color=blue"></a>  
+  <a href="https://nodejs.org"><img alt="node engine" src="https://img.shields.io/node/v/astrocode?label=node"></a>  
+  <a href="https://www.npmjs.com/package/astrocode"><img alt="license: MIT" src="https://img.shields.io/npm/l/astrocode?label=license"></a>  
 </p>
 
 **A fast terminal coding agent: sub-agents, and swarm mode, on exactly two dependencies.**
@@ -30,16 +31,44 @@ sub-agent delegation — pointed at any provider that speaks the OpenAI
 Ollama, LM Studio, or vLLM. No API key yet? `--demo` runs a scripted local  
 provider so you can try the whole pipeline offline.
 
+## Snapshot
+
+<p align="center">
+  <img alt="AstroCode TUI — a streamed markdown answer, the prompt, and the status bar" src="assets/snapshot.png">
+</p>
+
+A real session: the answer streams in as rendered markdown with syntax-highlighted  
+code, the indicator in the top-left tracks where you are in a long transcript, and  
+the status bar carries mode, model, context %, token count, spend, branch, session,  
+and cwd.
+
 ## Install
 
+Requires Node 18.8+. Pick whichever fits your setup — all three end up with an  
+`astrocode` binary on your `PATH`.
+
+**One-liner** (macOS / Linux):
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ahsannadir/astrocode/main/scripts/install.sh | bash
+curl -fsSL https://astrocli.pages.dev/install | bash
 ```
 
 The installer checks for Node 18.8+, installs from the npm registry, and falls  
 back to a source build when the package isn't published yet — the same command  
-works either way. It puts `astrocode` on your `PATH`; pass `--version <v>` to  
-pin a release or `--from-source` to skip the registry entirely.
+works either way. Pass `--version <v>` to pin a release or `--from-source` to  
+skip the registry entirely.
+
+**npm**
+
+```bash
+npm i -g astrocode
+```
+
+**bun**
+
+```bash
+bun add -g astrocode
+```
 
 ### From source
 
@@ -81,7 +110,7 @@ menu without losing what you've written.
 ```text
 You: add rate limiting to the login endpoint
 
-❯ astrocode · reading src/routes/auth.ts · editing · running tests
+❯ astrocode
 ```
 
 The agent doesn't lock you out while it works. **Enter queues** your next prompt  
@@ -103,96 +132,57 @@ commands are refused outright unless the model explicitly forces them.
 
 ### Sessions and context
 
-Conversations save to `~/.astrocode/sessions` along with their model and mode,  
-so you can close the laptop and pick up tomorrow; `/recall` searches them with a  
-dependency-free BM25-style index. A compact repo map — directory tree, file  
-counts, `package.json` scripts, README blurb — is built at startup and available  
-on demand.
+Conversations save to `~/.astrocode/sessions` with their model and mode, and  
+`/recall` searches them through a BM25-style index. `/compact` folds old tool  
+batches into one-line summaries, auto-compact fires near 85% of the window, and  
+a head-and-tail truncator keeps one huge `read_file` from evicting the  
+conversation. A repo map — tree, file counts, scripts — builds at startup.
 
-Context is managed rather than hoped for. `/compact` collapses old tool batches  
-into one-line summaries while keeping the newest messages, tool-call/result  
-pairing, and your own task statements intact; auto-compact fires near 85% of the  
-window, so long sessions degrade instead of dying on a provider length error.  
-Every tool result also passes through a central head-and-tail truncator, so one  
-`read_file` on a minified bundle can't evict the conversation.
+### Safety and reliability
 
-### Safety and recovery
-
-Every write and edit snapshots the original file, so `/undo` reverts the last  
-change and `/rewind` restores the whole working tree to how it looked before the  
-last turn. `run_command` refuses `rm -rf /`, `dd`, `mkfs`, force-push, and  
-`reset --hard` unless the model explicitly forces them, and plan mode blocks  
-execution entirely. `ASTROCODE_BUDGET` sets a hard spend ceiling that pauses the  
-loop.
+Every write snapshots the original, so `/undo` reverts the last change and  
+`/rewind` restores the tree to before the last turn. `run_command` refuses  
+`rm -rf /`, `dd`, `mkfs`, force-push, and `reset --hard` unless explicitly  
+forced, and `ASTROCODE_BUDGET` caps spend. Repeated identical tool calls are  
+nudged then blocked with the first result replayed, malformed tool arguments are  
+repaired instead of failing the turn, and a sub-agent that burns its budget  
+still gets one final tool-less call to write its report.
 
 ### Cost and verification
 
-When the provider reports usage — OpenAI-family `stream_options.include_usage`,  
-Responses API `response.completed`, or a gateway forwarding either — cost, the  
-context meter, and budget enforcement use the real numbers, prompt-cache  
-discounts included. Pricing covers current OpenAI (GPT-5/4.1/o-series),  
-Anthropic, Gemini, and DeepSeek; the chars÷4 estimate is only a fallback for  
-servers that report nothing.
-
-With `ASTROCODE_VERIFY=1`, AstroCode detects and runs your typecheck, lint, and  
-tests after edits (from `package.json`, `Makefile`, `Cargo.toml`, or `go.mod`),  
-and `ASTROCODE_AUTOCOMMIT=1` commits afterwards. A failing check hands the  
-errors back to the agent for up to two repair rounds instead of ending the turn  
-on a red test.
+Real provider usage — OpenAI `stream_options.include_usage`, Responses  
+`response.completed`, or a gateway forwarding either — drives cost, the context  
+meter, and budget enforcement, prompt-cache discounts included; chars÷4 is only  
+the fallback. Pricing covers current OpenAI, Anthropic, Gemini, and DeepSeek.  
+`ASTROCODE_VERIFY=1` runs your typecheck, lint, and tests after edits and hands  
+failures back for up to two repair rounds, and `ASTROCODE_AUTOCOMMIT=1` commits  
+afterwards.
 
 ### Delegation
 
 `spawn_agent` hands work to `researcher`, `file-picker`, `code-searcher`, or  
-`reviewer` — read-only tools, hard turn/time/report budgets, no file edits, no  
-child agents. Pass a `workers` array to run up to five at once and merge their  
-reports.
-
-`/swarm <goal>` goes further: it splits a goal into independent subtasks, gives  
-each worker its own git worktree and branch, runs a full agent loop per worker  
-in parallel, then merges the builders' branches back and keeps the researchers'  
-reports. Failed workers are skipped with their branches kept for a manual retry;  
-`/swarm cleanup` discards the lot.
+`reviewer` — read-only, budgeted, no file edits or child agents — and a  
+`workers` array runs up to five at once. `/swarm <goal>` gives each worker its  
+own git worktree and branch, runs the loops in parallel, then merges the  
+builders' branches back and keeps the researchers' reports; `/swarm cleanup`  
+discards the lot.
 
 ### Extensibility
 
-List MCP servers in `.astrocode/mcp.json` (the same shape as Claude Code's  
-config) and their tools appear as `mcp_<server>_<tool>`. `astrocode serve` points  
-the other direction: it exposes AstroCode's own tools over JSON-RPC 2.0 on stdio  
-so another agent or editor can delegate to it — read-only unless  
-`ASTROCODE_SERVE_WRITES=1`, and never exposing `spawn_agent`, `worktree`, or  
-`todo`.
-
-Skills are Markdown packages at `.astrocode/skills/<name>/SKILL.md` that cost one  
-line of context until the agent actually loads them.
-
+MCP servers in `.astrocode/mcp.json` (Claude Code's shape) surface as  
+`mcp_<server>_<tool>`; `astrocode serve` points the other way, exposing  
+AstroCode's tools over JSON-RPC 2.0 on stdio — read-only unless  
+`ASTROCODE_SERVE_WRITES=1`. Skills are Markdown at  
+`.astrocode/skills/<name>/SKILL.md`, costing one line of context until loaded.
 
 ### The interface
 
-A twinkling ASCII banner, and streamed replies rendered as real markdown —  
-headings, nested emphasis, links, images, tables, task lists, and framed code  
-blocks with syntax highlighting for ~30 languages. Diff and patch fences color  
-their `+`/`-` lines and hunk headers. Inline spans are parsed before wrapping, so  
-emphasis crossing a line break keeps its styling instead of leaking `**`  
-markers; layout is measured in terminal cells, so CJK text and emoji wrap where  
-they should.
-
-Around that sit a live status bar (mode, model, context %, tasks, spend, branch,  
-cwd), a task panel the agent keeps current through the `todo` tool, and real  
-modals for `/login`, `/models`, `/settings`, and `/theme`. Twelve themes each  
-carry their own syntax palette — scrolling `/theme` previews them live, and `Esc`  
-puts the previous theme back. Your terminal's native mouse selection works, and  
-`Ctrl+K` copies clean text without banners or prefixes.
-
-If stdout isn't a TTY (CI, a pipe), AstroCode prints a banner and exits instead  
-of crashing.
-
-### Reliability by construction
-
-The robustness work is mechanical rather than prompt-based: repeated identical  
-tool calls are nudged and then blocked, with the first result replayed; malformed  
-tool arguments (markdown fences, trailing commas, type drift) are repaired  
-instead of failing the turn; and a sub-agent that burns its budget without  
-answering gets one final tool-less call to write its report.
+Streamed markdown — headings, tables, task lists, ~30 highlighted languages,  
+colored diffs — wrapped in terminal cells so CJK and emoji behave. Around it: a  
+status bar (mode, model, context %, tasks, spend, branch, cwd), a `todo`-driven  
+task panel, and modals for `/login`, `/models`, `/settings`, and `/theme`;  
+twelve themes preview live and `Ctrl+K` copies clean text. Non-TTY stdout prints  
+a banner and exits.
 
 ## Configuration
 
