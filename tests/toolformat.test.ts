@@ -128,6 +128,27 @@ test('malformed args: still yields a header line, never throws', () => {
   assert.ok(lines[0].text.includes('write_file'));
 });
 
+test('todo: summarises the call instead of dumping argument JSON', () => {
+  const lines = formatToolCall(
+    'todo',
+    JSON.stringify({ action: 'update', id: 't3', status: 'in_progress' }),
+    W,
+  );
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].text, '☄ todo update t3 → in_progress');
+  assert.ok(!lines[0].text.includes('{'));
+});
+
+test('todo: add carries the task text', () => {
+  const lines = formatToolCall(
+    'todo',
+    JSON.stringify({ action: 'add', text: 'Wire the status bar' }),
+    W,
+  );
+  assert.ok(lines[0].text.includes('add'));
+  assert.ok(lines[0].text.includes('Wire the status bar'));
+});
+
 test('repomap: bare header with no trailing detail', () => {
   const lines = formatToolCall('repomap', '{}', W);
   assert.equal(lines[0].text.trim(), '☄ repomap');

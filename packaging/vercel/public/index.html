@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install AstroCode</title>
+<meta name="description" content="Install AstroCode — a fast terminal coding agent: 16 tools, sub-agents, and swarm mode.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0a0a'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%235dcaa5'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --row: #121212;
+    --row-hover: #171717;
+    --border: #262626;
+    --text: #ededed;
+    --muted: #6e6e6e;
+    --muted-strong: #a3a3a3;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 20px;
+  }
+  main { width: 100%; max-width: 720px; }
+  header { margin-bottom: 32px; }
+  h1 {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin: 0 0 10px;
+  }
+  .tagline {
+    color: var(--muted-strong);
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0;
+    max-width: 56ch;
+  }
+  .rows { display: flex; flex-direction: column; gap: 10px; }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--row);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .row:hover { background: var(--row-hover); border-color: #303030; }
+  .badge {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--muted);
+    flex: none;
+    user-select: none;
+  }
+  .cmd {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    overflow-x: auto;
+    white-space: nowrap;
+    flex: 1 1 auto;
+    scrollbar-width: none;
+  }
+  .cmd::-webkit-scrollbar { display: none; }
+  .copy {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 120ms ease, background 120ms ease;
+  }
+  .copy:hover { color: var(--text); background: #1f1f1f; }
+  .copy:focus-visible { outline: 1px solid var(--muted-strong); outline-offset: 1px; }
+  .copy.done { color: #5dcaa5; }
+  .copy.failed { color: #e24b4a; }
+  .copy svg { display: block; }
+  .soon .cmd { color: var(--muted); }
+  .soon .copy { opacity: 0.35; cursor: not-allowed; }
+  .soon .copy:hover { color: var(--muted); background: transparent; }
+  .pill {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 8px;
+    user-select: none;
+  }
+  footer {
+    margin-top: 28px;
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+  footer code {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted-strong);
+  }
+  footer a { color: var(--muted-strong); text-decoration: none; border-bottom: 1px solid var(--border); }
+  footer a:hover { color: var(--text); border-color: var(--muted); }
+  @media (max-width: 560px) {
+    .badge { display: none; }
+    .pill { display: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>AstroCode</h1>
+    <p class="tagline">A fast terminal coding agent: 16 tools, sub-agents, and swarm mode, on exactly two dependencies. Needs Node 18.8+.</p>
+  </header>
+
+  <div class="rows" id="rows">
+    <div class="row" data-install="curl">
+      <span class="badge">[curl]</span>
+      <code class="cmd" data-cmd="https://raw.githubusercontent.com/ahsannadir/astrocode/main/scripts/install.sh"></code>
+      <button class="copy" type="button" aria-label="Copy install command"></button>
+    </div>
+    <div class="row soon" data-install="npm">
+      <span class="badge">[npm]</span>
+      <code class="cmd" data-cmd="npm i -g astrocode"></code>
+      <span class="pill">soon</span>
+      <button class="copy" type="button" aria-label="Copy install command" disabled></button>
+    </div>
+    <div class="row soon" data-install="bun">
+      <span class="badge">[bun]</span>
+      <code class="cmd" data-cmd="bun add -g astrocode"></code>
+      <span class="pill">soon</span>
+      <button class="copy" type="button" aria-label="Copy install command" disabled></button>
+    </div>
+    <div class="row soon" data-install="brew">
+      <span class="badge">[brew]</span>
+      <code class="cmd" data-cmd="brew install ahsannadir/tap/astrocode"></code>
+      <span class="pill">soon</span>
+      <button class="copy" type="button" aria-label="Copy install command" disabled></button>
+    </div>
+  </div>
+
+  <footer>
+    The installer checks for Node 18.8+, builds AstroCode, and puts <code>astrocode</code> on your PATH.
+    Then run <code>astrocode --demo</code> to try it without an API key.<br>
+    Docs and source: <a href="https://github.com/ahsannadir/astrocode">github.com/ahsannadir/astrocode</a>
+  </footer>
+</main>
+
+<script>
+(function () {
+  var ICON_COPY = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5.75" y="5.75" width="7.5" height="7.5" rx="2"/><path d="M10.25 5.75V4.25a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1.5"/></svg>';
+  var ICON_DONE = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3.2L13 4.9"/></svg>';
+
+  // Served from a Vercel deployment, /install proxies the script in the repo.
+  // Opened straight off disk, fall back to the raw GitHub URL.
+  var served = location.protocol === 'http:' || location.protocol === 'https:';
+
+  document.querySelectorAll('.row').forEach(function (row) {
+    var code = row.querySelector('.cmd');
+    var target = code.getAttribute('data-cmd');
+    var text;
+
+    if (row.getAttribute('data-install') === 'curl') {
+      // Served from a Vercel deployment, /install proxies the repo's script.
+      // Opened straight off disk, fall back to the raw GitHub URL.
+      text = served
+        ? 'curl -fsSL ' + location.origin + '/install | bash'
+        : 'curl -fsSL ' + target + ' | bash';
+    } else {
+      text = target;
+    }
+
+    code.textContent = text;
+    code.title = text;
+
+    var btn = row.querySelector('.copy');
+    btn.innerHTML = ICON_COPY;
+    btn.setAttribute('data-copy', text);
+
+    if (btn.disabled) return;
+
+    btn.addEventListener('click', function () {
+      var value = btn.getAttribute('data-copy');
+      var write = (navigator.clipboard && navigator.clipboard.writeText)
+        ? navigator.clipboard.writeText(value).catch(function () { return fallbackCopy(value); })
+        : fallbackCopy(value);
+
+      Promise.resolve(write).then(function () {
+        btn.innerHTML = ICON_DONE;
+        btn.classList.remove('failed');
+        btn.classList.add('done');
+        btn.setAttribute('aria-label', 'Copied');
+        setTimeout(function () {
+          btn.innerHTML = ICON_COPY;
+          btn.classList.remove('done');
+          btn.setAttribute('aria-label', 'Copy install command');
+        }, 1400);
+      }, function () {
+        // Clipboard blocked and the execCommand fallback failed too. Say so
+        // rather than leaving the button looking like it did nothing.
+        btn.classList.add('failed');
+        btn.setAttribute('aria-label', 'Copy failed — select the command manually');
+        setTimeout(function () { btn.classList.remove('failed'); }, 1800);
+      });
+    });
+  });
+
+  function fallbackCopy(value) {
+    return new Promise(function (resolve, reject) {
+      var el = document.createElement('textarea');
+      el.value = value;
+      el.setAttribute('readonly', '');
+      el.style.position = 'absolute';
+      el.style.left = '-9999px';
+      document.body.appendChild(el);
+      el.select();
+      try {
+        document.execCommand('copy') ? resolve() : reject(new Error('copy failed'));
+      } catch (err) {
+        reject(err);
+      } finally {
+        document.body.removeChild(el);
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

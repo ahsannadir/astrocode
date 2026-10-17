@@ -128,8 +128,11 @@ function flatten(items: UIItem[], width: number, tick: number): UILine[] {
           color: item.ok ? theme.toolOk : theme.toolFail,
           copy: '',
         });
+        // No dimColor here: SGR-2 is implemented as a blend toward the
+        // background by most terminals, which sinks tool output into a
+        // near-black pane. `muted` is already the de-emphasised tone.
         wrapText(item.text, width).forEach((l) =>
-          lines.push({ text: l, color: theme.muted, dim: true, copy: l }),
+          lines.push({ text: l, color: theme.muted, copy: l }),
         );
         lines.push({ text: '' });
         break;

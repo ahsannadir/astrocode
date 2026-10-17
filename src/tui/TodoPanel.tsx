@@ -65,9 +65,9 @@ export function TodoPanel({ todos, maxRows = 6, width }: Props) {
         return (
           <Box key={t.id} flexDirection="row">
             <Text color={color}>{mark} </Text>
-            <Text color={color} dimColor={t.status !== 'in_progress'}>
-              {shown}
-            </Text>
+            {/* Colour carries the status; no dimColor, which most terminals
+                blend toward the background and turn into invisible text. */}
+            <Text color={color}>{shown}</Text>
           </Box>
         );
       })}

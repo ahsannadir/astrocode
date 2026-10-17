@@ -62,8 +62,13 @@ function clip(s: string): string {
   return displayWidth(flat) > MAX_VALUE ? fitLine(flat, MAX_VALUE) : flat;
 }
 
-/** The header row: `☄ name` in the tool color with a muted detail trailing. */
-function header(name: string, detail: string, width: number): UILine {
+/** The header row: `☄ name` in the tool color with a detail trailing. */
+function header(
+  name: string,
+  detail: string,
+  width: number,
+  detailColor: string = theme.muted,
+): UILine {
   const label = `☄ ${name}`;
   const room = Math.max(0, width - displayWidth(label) - 1);
   const segs: UISegment[] = [{ text: label, color: theme.toolName }];
@@ -71,7 +76,7 @@ function header(name: string, detail: string, width: number): UILine {
   if (detail) {
     const shown = room <= 0 ? '' : fitLine(detail, room);
     if (shown) {
-      segs.push({ text: ` ${shown}`, color: theme.muted });
+      segs.push({ text: ` ${shown}`, color: detailColor });
       text += ` ${shown}`;
     }
   }
@@ -132,7 +137,7 @@ function preview(
 
   if (hidden > 0) {
     const tail = `  … ${hidden} more line${hidden === 1 ? '' : 's'}`;
-    out.push({ text: tail, color: theme.muted, dim: true, copy: '' });
+    out.push({ text: tail, color: theme.muted, copy: '' });
   }
 }
 
@@ -157,12 +162,11 @@ function renderWrite(
     out.push({
       text: `    content · ${lines} line${lines === 1 ? '' : 's'}, ${content.length} chars`,
       color: theme.muted,
-      dim: true,
       copy: '',
     });
     preview(content, langFromPath(path), width, out);
   } else if (content === '') {
-    out.push({ text: '    content · empty', color: theme.muted, dim: true, copy: '' });
+    out.push({ text: '    content · empty', color: theme.muted, copy: '' });
   }
   return true;
 }
@@ -182,7 +186,7 @@ function renderEdit(
   if (path) out.push(...labeled('path:', path, width, theme.assistant));
   emitDiffBlock(str(a.search) ?? '', str(a.replace) ?? '', width, out);
   if (a.replace_all === true) {
-    out.push({ text: '    replace_all · yes', color: theme.muted, dim: true, copy: '' });
+    out.push({ text: '    replace_all · yes', color: theme.muted, copy: '' });
   }
   return true;
 }
@@ -201,7 +205,6 @@ function emitDiffBlock(search: string, replace: string, width: number, out: UILi
       out.push({
         text: `    … ${hidden} more line${hidden === 1 ? '' : 's'}`,
         color: theme.muted,
-        dim: true,
         copy: '',
       });
     }
@@ -226,7 +229,6 @@ function renderMulti(
   out.push({
     text: `    ${count} hunk${count === 1 ? '' : 's'}`,
     color: theme.muted,
-    dim: true,
     copy: '',
   });
   if (edits) {
@@ -236,7 +238,6 @@ function renderMulti(
       const head: UILine = {
         text: `    #${i + 1}`,
         color: theme.muted,
-        dim: true,
         copy: '',
       };
       out.push(head);
@@ -266,10 +267,34 @@ function renderCommand(
     out.push({
       text: `    ${extra.join(' · ')}`,
       color: theme.muted,
-      dim: true,
       copy: '',
     });
   }
+  return true;
+}
+
+/**
+ * `todo`: the raw JSON here is pure noise — `{"action":"update","id":"t3",
+ * "status":"in_progress"}` is one sentence. Read it as one:
+ *   ☄ todo  update t3 → in_progress
+ */
+function renderTodo(
+  name: string,
+  a: Record<string, any>,
+  width: number,
+  out: UILine[],
+): boolean {
+  const action = str(a.action);
+  if (action === null) return false;
+  const parts: string[] = [action];
+  const id = str(a.id);
+  if (id) parts.push(id);
+  const status = str(a.status);
+  if (status) parts.push(`→ ${status}`);
+  const text = str(a.text);
+  if (text) parts.push(`"${clip(text)}"`);
+  // `assistant` (not `muted`): the detail is the point of the line.
+  out.push(header(name, clip(parts.join(' ')), width, theme.assistant));
   return true;
 }
 
@@ -307,7 +332,6 @@ function renderSimple(
     out.push({
       text: `    ${extras.join(' · ')}`,
       color: theme.muted,
-      dim: true,
       copy: '',
     });
   }
@@ -386,6 +410,9 @@ export function formatToolCall(name: string, rawArgs: string, width: number): UI
         break;
       case 'run_command':
         handled = renderCommand(name, a, width, out);
+        break;
+      case 'todo':
+        handled = renderTodo(name, a, width, out);
         break;
       case 'repomap':
         renderBare(name, width, out);

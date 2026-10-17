@@ -14,6 +14,57 @@ const INK_COLORS = new Set([
   'blueBright', 'magentaBright', 'cyanBright', 'whiteBright',
 ]);
 
+/**
+ * Truecolor values for the named slots the palettes are written in.
+ *
+ * Palettes below are authored with chalk names because that reads well
+ * (`toolName: 'magentaBright'`), but rendering them as *named* colors makes
+ * the whole UI hostage to the user's terminal palette. Some popular schemes
+ * remap slots hard: Omarchy's `matte-black`, for instance, paints `brightBlack`
+ * as #333333 (≈ its #121212 background) and `yellow` as a dark red, which
+ * turns every `gray` label into invisible-on-black text and makes `todo` /
+ * `write_file` look like they lost their color entirely.
+ *
+ * So the tables are resolved through this map before they reach Ink: hex
+ * colors are emitted as truecolor (and downsample to the 256-color cube on
+ * terminals without it), which keeps every palette looking the same everywhere.
+ */
+export const NAMED_HEX: Record<string, string> = {
+  black: '#1b1b1b',
+  red: '#e06c75',
+  green: '#98c379',
+  yellow: '#e5c07b',
+  blue: '#61afef',
+  magenta: '#c678dd',
+  cyan: '#56b6c2',
+  white: '#dcdfe4',
+  // `gray` is the muted slot: bright enough to read on a near-black
+  // background, still clearly secondary to `white`.
+  gray: '#8b93a1',
+  blackBright: '#5c6370',
+  redBright: '#ff7b86',
+  greenBright: '#b5e890',
+  yellowBright: '#ffd68a',
+  blueBright: '#82c0ff',
+  magentaBright: '#e39ff6',
+  cyanBright: '#7fd6e3',
+  whiteBright: '#ffffff',
+};
+
+/** Resolve a palette written in chalk names to truecolor hex. */
+function toHex(color: string): string {
+  return NAMED_HEX[color] ?? color;
+}
+
+/** Copy a palette through toHex(), keeping the Theme shape. */
+function resolve(palette: Theme): Theme {
+  const out = {} as Theme;
+  for (const key of Object.keys(palette) as (keyof Theme)[]) {
+    out[key] = toHex(palette[key]);
+  }
+  return out;
+}
+
 export interface Theme {
   ascii: string;
   asciiAccent: string;
@@ -37,8 +88,8 @@ export interface Theme {
   heading: string;
   bullet: string;
   code: string;
-  // Syntax highlighting roles (see src/tui/syntax.ts). Kept to named Ink
-  // colors so validThemeColors() and every palette stay honest.
+  // Syntax highlighting roles (see src/tui/syntax.ts). Authored as named Ink
+  // colors, resolved to truecolor by toHex() like the rest of the palette.
   synKeyword: string;
   synString: string;
   synNumber: string;
@@ -53,7 +104,7 @@ export interface Theme {
   codeBorder: string;
 }
 
-export const THEMES: Record<string, Theme> = {
+const PALETTES: Record<string, Theme> = {
   astro: {
     ascii: 'cyan',
     asciiAccent: 'magenta',
@@ -471,6 +522,14 @@ export const THEMES: Record<string, Theme> = {
   },
 };
 
+/**
+ * The palettes as they are rendered: the authored tables resolved to
+ * truecolor, so a terminal that remaps ANSI slots can't flatten the UI.
+ */
+export const THEMES: Record<string, Theme> = Object.fromEntries(
+  Object.entries(PALETTES).map(([name, palette]) => [name, resolve(palette)]),
+);
+
 export const THEME_NAMES: string[] = Object.keys(THEMES);
 
 /** The active palette. Mutated in place by setTheme(); read at render time. */
@@ -496,9 +555,11 @@ export function setTheme(name?: string | null): string {
   return applied;
 }
 
-/** Guard for tests: every theme must use only valid named Ink colors. */
+/** Guard for tests: every theme color must be a named Ink color or #rrggbb. */
 export function validThemeColors(t: Theme): boolean {
-  return Object.values(t).every((c) => INK_COLORS.has(c));
+  return Object.values(t).every(
+    (c) => INK_COLORS.has(c) || /^#[0-9a-fA-F]{6}$/.test(c),
+  );
 }
 
 export const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];

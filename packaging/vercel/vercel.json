@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "outputDirectory": "public",
+  "rewrites": [
+    {
+      "source": "/install",
+      "destination": "https://raw.githubusercontent.com/ahsannadir/astrocode/main/scripts/install.sh"
+    }
+  ]
+}
