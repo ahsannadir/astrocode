@@ -4,10 +4,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { saveAuth } from '../src/auth.js';
-import { loadConfig, parseArgs } from '../src/config.js';
+import { loadConfig, parseArgs, VERSION } from '../src/config.js';
+
+test('config: VERSION tracks package.json instead of a hardcoded copy', () => {
+  // A stale literal here makes `astrocode --version` report the previous
+  // release right after an upgrade, which is exactly when people check.
+  const pkg = JSON.parse(
+    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+  ) as { version: string };
+  assert.equal(VERSION, pkg.version);
+});
 
 let tmp: string;
 const origFile = process.env.ASTROCODE_AUTH_FILE;

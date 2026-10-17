@@ -14,8 +14,7 @@ import { executeTool } from './tools/registry.js';
 import { getMemoryText } from './memory.js';
 import { lastSwarmSummary } from './swarm.js';
 import { discoverSkills } from './skills.js';
-
-const VERSION = '1.3.0';
+import { VERSION } from './config.js';
 
 interface ServeOptions {
   cwd: string;

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { AppConfig } from './types.js';
 import { loadAuth } from './auth.js';
 import { providerById } from './providers.js';
@@ -144,4 +145,21 @@ export function loadConfig(args: CliArgs): AppConfig {
   };
 }
 
-export const VERSION = '1.3.0';
+export const VERSION: string = readPackageVersion();
+
+/**
+ * The CLI version, taken from package.json instead of being duplicated here.
+ * A hardcoded copy drifts the moment `npm version` bumps the package, and then
+ * `astrocode --version` — the first thing anyone runs after upgrading — lies
+ * about what they are actually running.
+ */
+function readPackageVersion(): string {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as { version?: string };
+    return typeof pkg.version === 'string' ? pkg.version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
