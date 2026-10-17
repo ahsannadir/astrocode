@@ -14,14 +14,29 @@
   "engines": {
     "node": ">=18.8"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahsannadir/astrocode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ahsannadir/astrocode/issues"
+  },
+  "homepage": "https://github.com/ahsannadir/astrocode#readme",
+  "author": "Ahsan Nadir",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').chmodSync('dist/index.js', 0o755)\"",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "test": "tsx --test tests/*.test.ts",
     "probe": "npm run build && python3 scripts/run_probes.py",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "link": "npm run build && npm link && npm unlink -g astro 2>/dev/null; true"
+    "link": "npm run build && npm link && npm unlink -g astro 2>/dev/null; true",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm test",
+    "release": "npm version patch && git push --follow-tags"
   },
   "keywords": [
     "ai",

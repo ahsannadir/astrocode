@@ -27,6 +27,31 @@ offline.
 
 ## Install
 
+One line, no clone:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ahsannadir/astrocode/main/scripts/install.sh | bash
+```
+
+The installer checks for Node 18.8+, builds and installs AstroCode, and puts an
+`astrocode` command on your PATH. It installs from the npm registry once the
+package is published and falls back to a source build otherwise, so the same
+command works either way.
+
+```bash
+# flags, if you need them
+curl -fsSL https://raw.githubusercontent.com/ahsannadir/astrocode/main/scripts/install.sh | bash -s -- --version 1.3.0
+curl -fsSL https://raw.githubusercontent.com/ahsannadir/astrocode/main/scripts/install.sh | bash -s -- --from-source
+```
+
+Then:
+
+```bash
+astrocode --demo             # no API key needed
+```
+
+### From source
+
 ```bash
 git clone https://github.com/ahsannadir/astrocode.git
 cd astrocode

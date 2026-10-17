@@ -1,0 +1,95 @@
+name: Release
+
+# Publishing happens on a version tag, never on a branch push:
+#   npm version patch && git push --follow-tags
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      # `prepack` builds dist/; `prepublishOnly` re-runs the checks.
+      - name: Publish
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Optional: keep the Homebrew tap in sync. Requires a TAP_GITHUB_TOKEN secret
+  # with write access to ahsannadir/homebrew-tap.
+  bump-tap:
+    name: Bump Homebrew tap
+    needs: publish
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'ahsannadir' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute the published tarball sha256
+        id: sha
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          URL="https://registry.npmjs.org/astrocode/-/astrocode-${VERSION}.tgz"
+          SHA=""
+          # Give the registry a moment to serve the new tarball.
+          for _ in 1 2 3 4 5; do
+            if SHA="$(curl -fsSL "$URL" | shasum -a 256 | cut -d' ' -f1)"; then break; fi
+            sleep 6
+          done
+          [ -n "$SHA" ] || { echo "could not fetch $URL" >&2; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA"    >> "$GITHUB_OUTPUT"
+
+      - name: Render the formula
+        env:
+          VERSION: ${{ steps.sha.outputs.version }}
+          SHA: ${{ steps.sha.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          sed -E \
+            -e "s|astrocode-[0-9]+\.[0-9]+\.[0-9]+\.tgz|astrocode-${VERSION}.tgz|" \
+            -e "s|sha256 \"[0-9a-f]{64}\"|sha256 \"${SHA}\"|" \
+            packaging/homebrew/astrocode.rb > formula.rb
+          grep -q "${VERSION}" formula.rb
+          grep -q "${SHA}" formula.rb
+
+      - name: Push the formula to the tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          VERSION: ${{ steps.sha.outputs.version }}
+        run: |
+          set -euo pipefail
+          TAP="ahsannadir/homebrew-tap"
+          jq -n \
+            --arg message "astrocode ${VERSION}" \
+            --arg content "$(base64 -w0 < formula.rb)" \
+            '{message: $message, content: $content, branch: "main"}' > body.json
+
+          # PUT creates the file when it doesn't exist yet, and needs the
+          # current blob sha when it does.
+          SHA="$(gh api "repos/$TAP/contents/Formula/astrocode.rb" --jq '.sha' 2>/dev/null || true)"
+          if [ -n "$SHA" ]; then
+            jq --arg sha "$SHA" '. + {sha: $sha}' body.json > body.tmp && mv body.tmp body.json
+          fi
+
+          gh api --method PUT "repos/$TAP/contents/Formula/astrocode.rb" --input body.json
