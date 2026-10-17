@@ -5,65 +5,20 @@
  * at render time, so `setTheme()` overwrites the fields in place and the next
  * re-render picks up the new palette everywhere. The /theme popup switches
  * between the palettes below; the choice persists to ~/.astrocode/config.json.
- */
-
-/** Named Ink colors used by the UI (chalk base + bright aliases). */
-const INK_COLORS = new Set([
-  'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
-  'gray', 'blackBright', 'redBright', 'greenBright', 'yellowBright',
-  'blueBright', 'magentaBright', 'cyanBright', 'whiteBright',
-]);
-
-/**
- * Truecolor values for the named slots the palettes are written in.
  *
- * Palettes below are authored with chalk names because that reads well
- * (`toolName: 'magentaBright'`), but rendering them as *named* colors makes
- * the whole UI hostage to the user's terminal palette. Some popular schemes
- * remap slots hard: Omarchy's `matte-black`, for instance, paints `brightBlack`
- * as #333333 (≈ its #121212 background) and `yellow` as a dark red, which
- * turns every `gray` label into invisible-on-black text and makes `todo` /
- * `write_file` look like they lost their color entirely.
+ * Every palette is authored in truecolor hex, not chalk color names. Named
+ * colors (`'gray'`, `'magentaBright'`) are only slots in whatever scheme the
+ * user's terminal happens to run: a scheme that paints `brightBlack` onto its
+ * own background erases every `muted` label, and one that maps `yellow` to a
+ * dark red makes `system` text unreadable. Hex is emitted as truecolor and
+ * downsampled to the 256-color cube elsewhere, so a theme looks the same on
+ * every machine.
  *
- * So the tables are resolved through this map before they reach Ink: hex
- * colors are emitted as truecolor (and downsample to the 256-color cube on
- * terminals without it), which keeps every palette looking the same everywhere.
+ * Each theme is one dominant hue plus two accents, and every color clears
+ * 4.5:1 contrast against a near-black pane (`tests/theme.test.ts` enforces
+ * both). That is what keeps twelve palettes from collapsing into the same
+ * cyan-and-magenta soup.
  */
-export const NAMED_HEX: Record<string, string> = {
-  black: '#1b1b1b',
-  red: '#e06c75',
-  green: '#98c379',
-  yellow: '#e5c07b',
-  blue: '#61afef',
-  magenta: '#c678dd',
-  cyan: '#56b6c2',
-  white: '#dcdfe4',
-  // `gray` is the muted slot: bright enough to read on a near-black
-  // background, still clearly secondary to `white`.
-  gray: '#8b93a1',
-  blackBright: '#5c6370',
-  redBright: '#ff7b86',
-  greenBright: '#b5e890',
-  yellowBright: '#ffd68a',
-  blueBright: '#82c0ff',
-  magentaBright: '#e39ff6',
-  cyanBright: '#7fd6e3',
-  whiteBright: '#ffffff',
-};
-
-/** Resolve a palette written in chalk names to truecolor hex. */
-function toHex(color: string): string {
-  return NAMED_HEX[color] ?? color;
-}
-
-/** Copy a palette through toHex(), keeping the Theme shape. */
-function resolve(palette: Theme): Theme {
-  const out = {} as Theme;
-  for (const key of Object.keys(palette) as (keyof Theme)[]) {
-    out[key] = toHex(palette[key]);
-  }
-  return out;
-}
 
 export interface Theme {
   ascii: string;
@@ -88,8 +43,7 @@ export interface Theme {
   heading: string;
   bullet: string;
   code: string;
-  // Syntax highlighting roles (see src/tui/syntax.ts). Authored as named Ink
-  // colors, resolved to truecolor by toHex() like the rest of the palette.
+  // Syntax highlighting roles (see src/tui/syntax.ts).
   synKeyword: string;
   synString: string;
   synNumber: string;
@@ -104,431 +58,212 @@ export interface Theme {
   codeBorder: string;
 }
 
-const PALETTES: Record<string, Theme> = {
-  astro: {
-    ascii: 'cyan',
-    asciiAccent: 'magenta',
-    star: 'magenta',
-    user: 'cyanBright',
-    assistant: 'white',
-    assistantLabel: 'cyan',
-    system: 'yellow',
-    error: 'red',
-    toolName: 'magentaBright',
-    toolOk: 'green',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'gray',
-    status: 'blueBright',
-    prompt: 'greenBright',
-    promptSymbol: 'magenta',
-    thinking: 'yellow',
-    title: 'cyanBright',
-    plan: 'blueBright',
-    heading: 'cyanBright',
-    bullet: 'yellow',
-    code: 'greenBright',
-    synKeyword: 'magentaBright',
-    synString: 'greenBright',
-    synNumber: 'yellowBright',
-    synComment: 'gray',
-    synFunction: 'cyanBright',
-    synType: 'blueBright',
-    synPunct: 'white',
-    synAdd: 'greenBright',
-    synDel: 'redBright',
-    codeBorder: 'gray',
-  },
-  ocean: {
-    ascii: 'blue',
-    asciiAccent: 'cyan',
-    star: 'cyan',
-    user: 'cyanBright',
-    assistant: 'white',
-    assistantLabel: 'blueBright',
-    system: 'yellow',
-    error: 'red',
-    toolName: 'cyanBright',
-    toolOk: 'greenBright',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'blue',
-    status: 'blue',
-    prompt: 'cyanBright',
-    promptSymbol: 'cyan',
-    thinking: 'yellow',
-    title: 'blueBright',
-    plan: 'cyan',
-    heading: 'blueBright',
-    bullet: 'yellow',
-    code: 'greenBright',
-    synKeyword: 'cyanBright',
-    synString: 'greenBright',
-    synNumber: 'yellowBright',
-    synComment: 'gray',
-    synFunction: 'blueBright',
-    synType: 'cyan',
-    synPunct: 'white',
-    synAdd: 'greenBright',
-    synDel: 'redBright',
-    codeBorder: 'blue',
-  },
-  sunset: {
-    ascii: 'yellow',
-    asciiAccent: 'magenta',
-    star: 'yellow',
-    user: 'yellowBright',
-    assistant: 'white',
-    assistantLabel: 'magentaBright',
-    system: 'yellow',
-    error: 'red',
-    toolName: 'magentaBright',
-    toolOk: 'greenBright',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'yellow',
-    status: 'magenta',
-    prompt: 'yellowBright',
-    promptSymbol: 'magenta',
-    thinking: 'yellow',
-    title: 'magentaBright',
-    plan: 'magenta',
-    heading: 'yellowBright',
-    bullet: 'yellow',
-    code: 'greenBright',
-    synKeyword: 'magentaBright',
-    synString: 'greenBright',
-    synNumber: 'yellowBright',
-    synComment: 'gray',
-    synFunction: 'yellowBright',
-    synType: 'magenta',
-    synPunct: 'white',
-    synAdd: 'greenBright',
-    synDel: 'redBright',
-    codeBorder: 'yellow',
-  },
-  forest: {
-    ascii: 'green',
-    asciiAccent: 'greenBright',
-    star: 'greenBright',
-    user: 'greenBright',
-    assistant: 'white',
-    assistantLabel: 'green',
-    system: 'yellow',
-    error: 'red',
-    toolName: 'greenBright',
-    toolOk: 'greenBright',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'green',
-    status: 'green',
-    prompt: 'greenBright',
-    promptSymbol: 'greenBright',
-    thinking: 'yellow',
-    title: 'greenBright',
-    plan: 'green',
-    heading: 'greenBright',
-    bullet: 'yellow',
-    code: 'greenBright',
-    synKeyword: 'greenBright',
-    synString: 'yellowBright',
-    synNumber: 'cyanBright',
-    synComment: 'gray',
-    synFunction: 'cyanBright',
-    synType: 'green',
-    synPunct: 'white',
-    synAdd: 'greenBright',
-    synDel: 'redBright',
-    codeBorder: 'green',
-  },
-  matrix: {
-    ascii: 'green',
-    asciiAccent: 'greenBright',
-    star: 'green',
-    user: 'green',
-    assistant: 'greenBright',
-    assistantLabel: 'green',
-    system: 'green',
-    error: 'red',
-    toolName: 'greenBright',
-    toolOk: 'greenBright',
-    toolFail: 'red',
-    muted: 'green',
-    border: 'green',
-    status: 'green',
-    prompt: 'greenBright',
-    promptSymbol: 'green',
-    thinking: 'green',
-    title: 'greenBright',
-    plan: 'green',
-    heading: 'green',
-    bullet: 'green',
-    code: 'greenBright',
-    synKeyword: 'greenBright',
-    synString: 'green',
-    synNumber: 'greenBright',
-    synComment: 'gray',
-    synFunction: 'greenBright',
-    synType: 'green',
-    synPunct: 'green',
-    synAdd: 'greenBright',
-    synDel: 'red',
-    codeBorder: 'green',
-  },
-  aurora: {
-    // Northern lights: teal sky, green flash, blue depths.
-    ascii: 'cyan',
-    asciiAccent: 'greenBright',
-    star: 'greenBright',
-    user: 'greenBright',
-    assistant: 'white',
-    assistantLabel: 'cyan',
-    system: 'yellow',
-    error: 'red',
-    toolName: 'cyanBright',
-    toolOk: 'greenBright',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'cyan',
-    status: 'cyan',
-    prompt: 'greenBright',
-    promptSymbol: 'cyan',
-    thinking: 'blueBright',
-    title: 'cyanBright',
-    plan: 'blueBright',
-    heading: 'greenBright',
-    bullet: 'cyanBright',
-    code: 'greenBright',
-    synKeyword: 'greenBright',
-    synString: 'cyanBright',
-    synNumber: 'yellowBright',
-    synComment: 'gray',
-    synFunction: 'cyan',
-    synType: 'blueBright',
-    synPunct: 'white',
-    synAdd: 'greenBright',
-    synDel: 'redBright',
-    codeBorder: 'cyan',
-  },
-  cyberpunk: {
-    // Neon voltage: hot magenta, electric cyan, acid yellow.
-    ascii: 'magentaBright',
-    asciiAccent: 'cyanBright',
-    star: 'cyanBright',
-    user: 'cyanBright',
-    assistant: 'whiteBright',
-    assistantLabel: 'magentaBright',
-    system: 'yellowBright',
-    error: 'red',
-    toolName: 'magentaBright',
-    toolOk: 'greenBright',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'magentaBright',
-    status: 'cyan',
-    prompt: 'yellowBright',
-    promptSymbol: 'magentaBright',
-    thinking: 'blueBright',
-    title: 'magentaBright',
-    plan: 'cyanBright',
-    heading: 'cyanBright',
-    bullet: 'magentaBright',
-    code: 'yellowBright',
-    synKeyword: 'magentaBright',
-    synString: 'cyanBright',
-    synNumber: 'yellowBright',
-    synComment: 'gray',
-    synFunction: 'cyan',
-    synType: 'magenta',
-    synPunct: 'whiteBright',
-    synAdd: 'greenBright',
-    synDel: 'redBright',
-    codeBorder: 'magentaBright',
-  },
-  dracula: {
-    // The beloved palette: purple, pink, green, and cyan on night black.
-    ascii: 'magenta',
-    asciiAccent: 'magentaBright',
-    star: 'magentaBright',
-    user: 'cyanBright',
-    assistant: 'white',
-    assistantLabel: 'magentaBright',
-    system: 'yellowBright',
-    error: 'red',
-    toolName: 'magentaBright',
-    toolOk: 'greenBright',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'magenta',
-    status: 'magenta',
-    prompt: 'greenBright',
-    promptSymbol: 'magentaBright',
-    thinking: 'magenta',
-    title: 'magentaBright',
-    plan: 'cyan',
-    heading: 'cyanBright',
-    bullet: 'magentaBright',
-    code: 'greenBright',
-    synKeyword: 'magentaBright',
-    synString: 'greenBright',
-    synNumber: 'yellowBright',
-    synComment: 'gray',
-    synFunction: 'cyanBright',
-    synType: 'cyan',
-    synPunct: 'white',
-    synAdd: 'greenBright',
-    synDel: 'redBright',
-    codeBorder: 'magenta',
-  },
-  inferno: {
-    // Ember & flame: red heat with a yellow core.
-    ascii: 'red',
-    asciiAccent: 'yellowBright',
-    star: 'yellow',
-    user: 'yellowBright',
-    assistant: 'white',
-    assistantLabel: 'redBright',
-    system: 'yellow',
-    error: 'red',
-    toolName: 'yellowBright',
-    toolOk: 'green',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'red',
-    status: 'redBright',
-    prompt: 'yellowBright',
-    promptSymbol: 'red',
-    thinking: 'yellow',
-    title: 'yellowBright',
-    plan: 'yellow',
-    heading: 'yellowBright',
-    bullet: 'yellow',
-    code: 'yellowBright',
-    synKeyword: 'yellowBright',
-    synString: 'redBright',
-    synNumber: 'yellow',
-    synComment: 'gray',
-    synFunction: 'yellowBright',
-    synType: 'red',
-    synPunct: 'white',
-    synAdd: 'greenBright',
-    synDel: 'redBright',
-    codeBorder: 'red',
-  },
-  nebula: {
-    // Deep space: violet dust clouds and blue starlight.
-    ascii: 'magenta',
-    asciiAccent: 'blueBright',
-    star: 'cyanBright',
-    user: 'cyanBright',
-    assistant: 'white',
-    assistantLabel: 'magentaBright',
-    system: 'yellow',
-    error: 'red',
-    toolName: 'magentaBright',
-    toolOk: 'greenBright',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'magenta',
-    status: 'magentaBright',
-    prompt: 'cyanBright',
-    promptSymbol: 'magenta',
-    thinking: 'blueBright',
-    title: 'magentaBright',
-    plan: 'blueBright',
-    heading: 'cyanBright',
-    bullet: 'magentaBright',
-    code: 'blueBright',
-    synKeyword: 'magentaBright',
-    synString: 'cyanBright',
-    synNumber: 'blueBright',
-    synComment: 'gray',
-    synFunction: 'cyan',
-    synType: 'magenta',
-    synPunct: 'white',
-    synAdd: 'greenBright',
-    synDel: 'redBright',
-    codeBorder: 'magenta',
-  },
-  noir: {
-    // Monochrome with a single red accent — chrome in shades of gray.
-    ascii: 'white',
-    asciiAccent: 'gray',
-    star: 'whiteBright',
-    user: 'whiteBright',
-    assistant: 'white',
-    assistantLabel: 'whiteBright',
-    system: 'gray',
-    error: 'red',
-    toolName: 'whiteBright',
-    toolOk: 'green',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'gray',
-    status: 'whiteBright',
-    prompt: 'whiteBright',
-    promptSymbol: 'white',
-    thinking: 'gray',
-    title: 'whiteBright',
-    plan: 'white',
-    heading: 'whiteBright',
-    bullet: 'white',
-    code: 'whiteBright',
-    synKeyword: 'whiteBright',
-    synString: 'white',
-    synNumber: 'whiteBright',
-    synComment: 'gray',
-    synFunction: 'whiteBright',
-    synType: 'white',
-    synPunct: 'gray',
-    synAdd: 'whiteBright',
-    synDel: 'red',
-    codeBorder: 'gray',
-  },
-  synthwave: {
-    // Retro grid: magenta sky, cyan horizon, a yellow sun.
-    ascii: 'magenta',
-    asciiAccent: 'cyan',
-    star: 'yellowBright',
-    user: 'cyanBright',
-    assistant: 'white',
-    assistantLabel: 'magenta',
-    system: 'yellowBright',
-    error: 'red',
-    toolName: 'magentaBright',
-    toolOk: 'greenBright',
-    toolFail: 'red',
-    muted: 'gray',
-    border: 'magenta',
-    status: 'magenta',
-    prompt: 'cyanBright',
-    promptSymbol: 'magentaBright',
-    thinking: 'blueBright',
-    title: 'yellowBright',
-    plan: 'cyan',
-    heading: 'magentaBright',
-    bullet: 'cyanBright',
-    code: 'yellowBright',
-    synKeyword: 'magentaBright',
-    synString: 'cyanBright',
-    synNumber: 'yellowBright',
-    synComment: 'gray',
-    synFunction: 'cyan',
-    synType: 'magenta',
-    synPunct: 'white',
-    synAdd: 'greenBright',
-    synDel: 'redBright',
-    codeBorder: 'magenta',
-  },
-};
-
 /**
- * The palettes as they are rendered: the authored tables resolved to
- * truecolor, so a terminal that remaps ANSI slots can't flatten the UI.
+ * The seven decisions a theme actually makes. Every other role is derived, so
+ * a palette is a hue choice rather than thirty-two independent guesses — and
+ * two themes can't drift into looking alike by sharing a stray slot.
  */
-export const THEMES: Record<string, Theme> = Object.fromEntries(
-  Object.entries(PALETTES).map(([name, palette]) => [name, resolve(palette)]),
-);
+interface Palette {
+  /** Dominant hue: banner, border, title, headings, tool names. */
+  primary: string;
+  /** Second hue: prompts, bullets, the user's own words, functions. */
+  secondary: string;
+  /** Third hue: status bar, plan text, thinking, numbers, types. */
+  accent: string;
+  /** Body text — near-white, tinted toward the theme. */
+  body: string;
+  /** De-emphasised text: labels, metadata, tool output, comments. */
+  muted: string;
+  /** Success: tool results, added diff lines. */
+  ok: string;
+  /** Failure: errors, removed diff lines. */
+  fail: string;
+  /** Per-role escapes for palettes that need a fourth voice. */
+  over?: Partial<Theme>;
+}
+
+/** Derive the full role set from a palette's hues. */
+function mk(p: Palette): Theme {
+  return {
+    ascii: p.primary,
+    asciiAccent: p.secondary,
+    star: p.secondary,
+    user: p.secondary,
+    assistant: p.body,
+    assistantLabel: p.primary,
+    system: p.accent,
+    error: p.fail,
+    toolName: p.primary,
+    toolOk: p.ok,
+    toolFail: p.fail,
+    muted: p.muted,
+    border: p.primary,
+    status: p.accent,
+    prompt: p.secondary,
+    promptSymbol: p.primary,
+    thinking: p.accent,
+    title: p.primary,
+    plan: p.accent,
+    heading: p.primary,
+    bullet: p.secondary,
+    code: p.ok,
+    synKeyword: p.primary,
+    synString: p.ok,
+    synNumber: p.accent,
+    synComment: p.muted,
+    synFunction: p.secondary,
+    synType: p.accent,
+    synPunct: p.body,
+    synAdd: p.ok,
+    synDel: p.fail,
+    codeBorder: p.primary,
+    ...p.over,
+  };
+}
+
+export const THEMES: Record<string, Theme> = {
+  // The flagship: cyan signal, orchid reply, lime success.
+  astro: mk({
+    primary: '#5ad1e6',
+    secondary: '#e58cff',
+    accent: '#a8e06a',
+    body: '#e6eef2',
+    muted: '#8b9aa6',
+    ok: '#a8e06a',
+    fail: '#ff6b7a',
+  }),
+
+  // Deep water: blue hull, teal current. No pink, no purple.
+  ocean: mk({
+    primary: '#5aa9ff',
+    secondary: '#7fd6e0',
+    accent: '#9ecbff',
+    body: '#dce8f5',
+    muted: '#8296ab',
+    ok: '#63d8c0',
+    fail: '#ff7a85',
+  }),
+
+  // Golden hour: gold sun, rose clouds, violet dusk.
+  sunset: mk({
+    primary: '#ffc857',
+    secondary: '#ff6f91',
+    accent: '#b48cff',
+    body: '#f7e4d8',
+    muted: '#b39a90',
+    ok: '#b6e07a',
+    fail: '#ff5f6d',
+  }),
+
+  // Understory: leaf green, moss, bark.
+  forest: mk({
+    primary: '#8fd46a',
+    secondary: '#cfe08a',
+    accent: '#d9b382',
+    body: '#e4eddd',
+    muted: '#93a68d',
+    ok: '#7fe0a8',
+    fail: '#e88a7a',
+  }),
+
+  // Phosphor: one hue, like the monitor it came from.
+  matrix: mk({
+    primary: '#4ade80',
+    secondary: '#86efac',
+    accent: '#34d399',
+    body: '#d6ffe0',
+    muted: '#5fa878',
+    ok: '#4ade80',
+    fail: '#ff6b6b',
+    over: { synNumber: '#86efac', synType: '#86efac' },
+  }),
+
+  // Sky on fire: teal-green flash, lime rim, violet crown.
+  aurora: mk({
+    primary: '#4fe0b8',
+    secondary: '#a6f08a',
+    accent: '#9f8cff',
+    body: '#e2f2ee',
+    muted: '#86a8a4',
+    ok: '#7ef0b0',
+    fail: '#ff7a9a',
+  }),
+
+  // Night City neon: hot red signage, rose glow, cold ice highlight.
+  cyberpunk: mk({
+    primary: '#ff3b52',
+    secondary: '#ff8a9a',
+    accent: '#8fd4ff',
+    body: '#f6e6e8',
+    muted: '#a88d92',
+    ok: '#7ee787',
+    fail: '#ff8080',
+    over: {
+      // A red theme shouldn't paint its strings green.
+      synString: '#ff8a9a',
+      synNumber: '#ffb3bf',
+      code: '#ff8a9a',
+      status: '#ffb03a',
+    },
+  }),
+
+  // The classic: lavender, pink, cyan, and a green that means "fine".
+  dracula: mk({
+    primary: '#bd93f9',
+    secondary: '#ff79c6',
+    accent: '#8be9fd',
+    body: '#f8f8f2',
+    muted: '#9a94b8',
+    ok: '#50fa7b',
+    fail: '#ff5555',
+  }),
+
+  // Ember bed: orange flame, yellow core, red underside.
+  inferno: mk({
+    primary: '#ff7a45',
+    secondary: '#ffc46b',
+    accent: '#ff5c4d',
+    body: '#f7e6d8',
+    muted: '#b09080',
+    ok: '#a8d86a',
+    fail: '#ff4d4d',
+  }),
+
+  // Deep space: indigo dust, magenta gas, no green anywhere.
+  nebula: mk({
+    primary: '#6f7dff',
+    secondary: '#d98cff',
+    accent: '#ff9ad5',
+    body: '#e9e8ff',
+    muted: '#9a94b8',
+    ok: '#8fd4ff',
+    fail: '#ff7a9a',
+    over: { toolOk: '#8fd4ff', synAdd: '#8fd4ff' },
+  }),
+
+  // Chrome: everything is a shade of gray except the one thing that broke.
+  noir: mk({
+    primary: '#e8e8e8',
+    secondary: '#c8c8c8',
+    accent: '#ff4d4d',
+    body: '#f5f5f5',
+    muted: '#9a9a9a',
+    ok: '#e8e8e8',
+    fail: '#ff4d4d',
+    over: { synNumber: '#c8c8c8', synType: '#c8c8c8', thinking: '#b0b0b0' },
+  }),
+
+  // Retro grid: magenta sky, violet horizon, a yellow sun.
+  synthwave: mk({
+    primary: '#ff5fd2',
+    secondary: '#9b7bff',
+    accent: '#ffd166',
+    body: '#ffe6f7',
+    muted: '#b090b8',
+    ok: '#7ef0c0',
+    fail: '#ff6b8a',
+  }),
+};
 
 export const THEME_NAMES: string[] = Object.keys(THEMES);
 
@@ -555,11 +290,9 @@ export function setTheme(name?: string | null): string {
   return applied;
 }
 
-/** Guard for tests: every theme color must be a named Ink color or #rrggbb. */
+/** Guard for tests: every theme color must be a #rrggbb truecolor value. */
 export function validThemeColors(t: Theme): boolean {
-  return Object.values(t).every(
-    (c) => INK_COLORS.has(c) || /^#[0-9a-fA-F]{6}$/.test(c),
-  );
+  return Object.values(t).every((c) => /^#[0-9a-fA-F]{6}$/.test(c));
 }
 
 export const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
