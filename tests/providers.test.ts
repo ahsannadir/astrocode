@@ -59,6 +59,27 @@ test('providers: ids are unique', () => {
   assert.equal(new Set(PROVIDERS.map((p) => p.id)).size, PROVIDERS.length);
 });
 
+test('providers: openai and anthropic list the current flagship models', () => {
+  const oa = providerById('openai');
+  assert.equal(oa.defaultModel, 'gpt-6-astra');
+  for (const m of ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna', 'gpt-5.6-sol']) {
+    assert.ok(oa.models.includes(m), `openai missing ${m}`);
+  }
+  // The /login tagline must name the current flagship, not a past generation.
+  assert.ok(oa.tagline.includes('GPT-6 Astra'), 'openai tagline is stale');
+  assert.ok(!oa.tagline.includes('GPT-4o'), 'openai tagline still names GPT-4o');
+
+  const an = providerById('anthropic');
+  assert.equal(an.defaultModel, 'claude-opus-5-5');
+  for (const m of ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']) {
+    assert.ok(an.models.includes(m), `anthropic missing ${m}`);
+  }
+  for (const m of an.models) {
+    assert.ok(!m.includes('claude-3'), `anthropic still offers legacy ${m}`);
+  }
+  assert.ok(an.tagline.includes('Fable 5.1'), 'anthropic tagline is stale');
+});
+
 test('providers: agentrouter exposes its endpoint and account catalog', () => {
   const ar = providerById('agentrouter');
   assert.equal(ar.baseUrl, 'https://agentrouter.org/v1');

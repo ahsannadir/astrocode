@@ -36,6 +36,26 @@ test('contextLimitFor: family limits', () => {
   assert.equal(contextLimitFor('gpt-4o'), 128_000);
   assert.equal(contextLimitFor('claude-3-5-sonnet'), 200_000);
   assert.equal(contextLimitFor('unknown-model'), 128_000);
+  // Current flagships from the /login catalog.
+  assert.equal(contextLimitFor('gpt-6-astra'), 200_000);
+  assert.equal(contextLimitFor('claude-fable-5-1'), 200_000);
+});
+
+test('pricingFor: current /login flagships price exactly', () => {
+  assert.deepEqual(pricingFor('gpt-6-astra'), {
+    inputPerM: 10,
+    outputPerM: 50,
+    cachedInputPerM: 1,
+  });
+  assert.deepEqual(pricingFor('claude-fable-5-1'), {
+    inputPerM: 10,
+    outputPerM: 50,
+    cachedInputPerM: 1,
+  });
+  // Versioned keys must beat the family fallbacks ('claude-opus' is 15/75).
+  assert.equal(pricingFor('claude-opus-5-5').inputPerM, 4);
+  assert.equal(pricingFor('claude-sonnet-5-5').inputPerM, 2);
+  assert.equal(pricingFor('gpt-5.6-sol').inputPerM, 4);
 });
 
 test('estimateContextTokens: sums message content and tool calls', () => {

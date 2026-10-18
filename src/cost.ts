@@ -13,9 +13,13 @@ export interface Pricing {
   cachedInputPerM?: number;
 }
 
-/** Approximate USD per 1M tokens, updated Sept 2026. */
+/** Approximate USD per 1M tokens, updated Oct 2026. */
 const PRICING: Record<string, Pricing> = {
-  // OpenAI
+  // OpenAI (standard tier, short context)
+  'gpt-6-astra': { inputPerM: 10, outputPerM: 50, cachedInputPerM: 1 },
+  'gpt-6.1-sol': { inputPerM: 2, outputPerM: 10, cachedInputPerM: 0.1 },
+  'gpt-6-luna': { inputPerM: 0.1, outputPerM: 0.5, cachedInputPerM: 0.01 },
+  'gpt-5.6-sol': { inputPerM: 4, outputPerM: 20, cachedInputPerM: 0.4 },
   'gpt-5': { inputPerM: 1.25, outputPerM: 10, cachedInputPerM: 0.125 },
   'gpt-5-mini': { inputPerM: 0.25, outputPerM: 2, cachedInputPerM: 0.025 },
   'gpt-5-nano': { inputPerM: 0.05, outputPerM: 0.4, cachedInputPerM: 0.005 },
@@ -31,7 +35,13 @@ const PRICING: Record<string, Pricing> = {
   'gpt-4-turbo': { inputPerM: 10, outputPerM: 30 },
   'gpt-4': { inputPerM: 30, outputPerM: 60 },
   'gpt-3.5-turbo': { inputPerM: 0.5, outputPerM: 1.5 },
-  // Anthropic (per 1M; opus/sonnet/haiku families incl. 3.5–4.5)
+  // Anthropic (per 1M)
+  'claude-fable-5-1': { inputPerM: 10, outputPerM: 50, cachedInputPerM: 1 },
+  'claude-opus-5-5': { inputPerM: 4, outputPerM: 20, cachedInputPerM: 0.4 },
+  'claude-sonnet-5-5': { inputPerM: 2, outputPerM: 10, cachedInputPerM: 0.2 },
+  'claude-haiku-5-5': { inputPerM: 0.1, outputPerM: 0.5, cachedInputPerM: 0.01 },
+  'claude-opus-5': { inputPerM: 5, outputPerM: 25, cachedInputPerM: 0.5 },
+  // Older Anthropic families (4.1 and earlier; opus/sonnet/haiku 3.5–4.5).
   'claude-opus': { inputPerM: 15, outputPerM: 75, cachedInputPerM: 1.5 },
   'claude-sonnet': { inputPerM: 3, outputPerM: 15, cachedInputPerM: 0.3 },
   'claude-haiku': { inputPerM: 0.8, outputPerM: 4, cachedInputPerM: 0.08 },
@@ -105,12 +115,19 @@ export function formatCost(usd: number): string {
 /** Approximate context-window size (in tokens) for common model families. */
 export function contextLimitFor(model: string): number {
   const m = model.toLowerCase();
-  if (m.includes('gpt-5') || m.includes('gpt-4.1') || m.includes('o3') || m.includes('o4') || m.includes('o1')) return 200_000;
+  if (m.includes('gpt-6') || m.includes('gpt-5') || m.includes('gpt-4.1') || m.includes('o3') || m.includes('o4') || m.includes('o1')) return 200_000;
   if (m.includes('gpt-4o')) return 128_000;
   if (m.includes('gpt-4-turbo')) return 128_000;
   if (m.includes('gpt-4')) return 8_192;
   if (m.includes('gpt-3.5')) return 16_385;
-  if (m.includes('claude-3') || m.includes('claude-opus') || m.includes('claude-sonnet') || m.includes('claude-haiku')) {
+  if (
+    m.includes('claude-3') ||
+    m.includes('claude-opus') ||
+    m.includes('claude-sonnet') ||
+    m.includes('claude-haiku') ||
+    m.includes('claude-fable') ||
+    m.includes('claude-mythos')
+  ) {
     return 200_000;
   }
   if (m.includes('gemini-2.5') || m.includes('gemini-1.5')) return 1_000_000;

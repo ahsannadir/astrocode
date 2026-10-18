@@ -133,5 +133,5 @@ test('config: no config file → demo defaults', () => {
   assert.equal(cfg.verify, false);
   assert.equal(cfg.autocommit, false);
   assert.equal(cfg.maxToolTurns, 20);
-  assert.equal(cfg.model, 'gpt-4o'); // OpenAI default
+  assert.equal(cfg.model, 'gpt-6-astra'); // OpenAI default
 });
