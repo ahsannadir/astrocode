@@ -32,8 +32,9 @@ ENVIRONMENT
   ASTROCODE_AUTOCOMMIT Auto-commit changes after a turn (1 = on)
   ASTROCODE_APPROVAL_MODE  Shell approval: off (default) | dangerous | all
   ASTROCODE_APPROVE    Pre-approved command prefixes, comma-separated ("npm test, git status")
-  ASTROCODE_THEME      Color theme (astro, aurora, cyberpunk, dracula, forest,
-                       inferno, matrix, nebula, noir, ocean, sunset, synthwave)
+  ASTROCODE_THEME      Color theme (astro, aurora, citrus, cyberpunk, dracula,
+                       forest, inferno, matrix, nebula, noir, ocean, sunset,
+                       synthwave)
   ASTROCODE_SESSION_DIR  Where /save sessions are stored (default ~/.astrocode/sessions)
   ASTROCODE_SERVE_WRITES Allow mutating tools over the MCP bus (1 = on; default read-only)
 

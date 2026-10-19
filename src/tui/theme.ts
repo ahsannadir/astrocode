@@ -16,7 +16,7 @@
  *
  * Each theme is one dominant hue plus two accents, and every color clears
  * 4.5:1 contrast against a near-black pane (`tests/theme.test.ts` enforces
- * both). That is what keeps twelve palettes from collapsing into the same
+ * both). That is what keeps thirteen palettes from collapsing into the same
  * cyan-and-magenta soup.
  */
 
@@ -262,6 +262,17 @@ export const THEMES: Record<string, Theme> = {
     muted: '#b090b8',
     ok: '#7ef0c0',
     fail: '#ff6b8a',
+  }),
+
+  // Orchard light: lemon-lime peel, tangerine flesh, periwinkle shadow.
+  citrus: mk({
+    primary: '#c2d94a',
+    secondary: '#ffb347',
+    accent: '#a89bff',
+    body: '#f4f5e2',
+    muted: '#9aa58a',
+    ok: '#7ee08a',
+    fail: '#ff7a6b',
   }),
 };
 

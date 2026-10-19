@@ -181,7 +181,7 @@ Streamed markdown — headings, tables, task lists, ~30 highlighted languages,
 colored diffs — wrapped in terminal cells so CJK and emoji behave. Around it: a  
 status bar (mode, model, context %, tasks, spend, branch, cwd), a `todo`-driven  
 task panel, and modals for `/login`, `/models`, `/settings`, and `/theme`;  
-twelve themes preview live and `Ctrl+K` copies clean text. Non-TTY stdout prints  
+thirteen themes preview live and `Ctrl+K` copies clean text. Non-TTY stdout prints  
 a banner and exits.
 
 ## Configuration
