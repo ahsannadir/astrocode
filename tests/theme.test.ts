@@ -125,8 +125,8 @@ test('themes: every color stays readable on a near-black background', () => {
   }
 });
 
-test('themes: default active palette is astro', () => {
-  assert.deepEqual(theme, THEMES.astro);
+test('themes: default active palette is cyberpunk', () => {
+  assert.deepEqual(theme, THEMES.cyberpunk);
 });
 
 test('themes: setTheme swaps the palette in place and reports the name', () => {
@@ -136,11 +136,11 @@ test('themes: setTheme swaps the palette in place and reports the name', () => {
   assert.notDeepEqual(theme, before);
 });
 
-test('themes: setTheme falls back to astro for unknown/empty names', () => {
-  assert.equal(setTheme('nope'), 'astro');
-  assert.equal(setTheme(''), 'astro');
-  assert.equal(setTheme(undefined), 'astro');
-  assert.deepEqual(theme, THEMES.astro);
+test('themes: setTheme falls back to cyberpunk for unknown/empty names', () => {
+  assert.equal(setTheme('nope'), 'cyberpunk');
+  assert.equal(setTheme(''), 'cyberpunk');
+  assert.equal(setTheme(undefined), 'cyberpunk');
+  assert.deepEqual(theme, THEMES.cyberpunk);
 });
 
 test('themes: setTheme bumps the revision so color caches invalidate', () => {

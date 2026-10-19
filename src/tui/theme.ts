@@ -122,7 +122,7 @@ function mk(p: Palette): Theme {
 }
 
 export const THEMES: Record<string, Theme> = {
-  // The flagship: cyan signal, orchid reply, lime success.
+  // Cyan signal, orchid reply, lime success.
   astro: mk({
     primary: '#5ad1e6',
     secondary: '#e58cff',
@@ -267,8 +267,11 @@ export const THEMES: Record<string, Theme> = {
 
 export const THEME_NAMES: string[] = Object.keys(THEMES);
 
+/** Palette used when no valid theme is configured. */
+export const DEFAULT_THEME = 'cyberpunk';
+
 /** The active palette. Mutated in place by setTheme(); read at render time. */
-export const theme: Theme = { ...THEMES.astro };
+export const theme: Theme = { ...THEMES[DEFAULT_THEME] };
 
 /**
  * Bumped by setTheme(). Renderers that memoize color-derived output include
@@ -277,11 +280,11 @@ export const theme: Theme = { ...THEMES.astro };
 export let themeRevision = 0;
 
 /**
- * Swap the active palette (unknown/empty names fall back to 'astro').
+ * Swap the active palette (unknown/empty names fall back to DEFAULT_THEME).
  * Returns the name that was actually applied.
  */
 export function setTheme(name?: string | null): string {
-  const applied = name && THEMES[name] ? name : 'astro';
+  const applied = name && THEMES[name] ? name : DEFAULT_THEME;
   const t = THEMES[applied];
   for (const key of Object.keys(t) as (keyof Theme)[]) {
     theme[key] = t[key];

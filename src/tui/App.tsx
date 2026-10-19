@@ -13,7 +13,7 @@ import { ThemeModal } from './ThemeModal.js';
 import { ApprovalPrompt } from './ApprovalPrompt.js';
 import { ApprovalGate, normalizeApprovalMode, parseApproveEnv } from '../approval.js';
 import type { ApprovalDecision } from '../approval.js';
-import { theme, setTheme, THEME_NAMES } from './theme.js';
+import { theme, setTheme, DEFAULT_THEME, THEME_NAMES } from './theme.js';
 import type { AppConfig, ChatMessage, PlanMode, TokenFragment } from '../types.js';
 import { createProvider } from '../ai/provider.js';
 import {
@@ -102,7 +102,7 @@ export function App({ config, cwd }: Props) {
   // and loadAuth() hits the disk). It is what /login offers to reuse instead
   // of restarting the base URL → key → model wizard.
   const [savedCustom, setSavedCustom] = useState<ExistingCustomConfig | null>(null);
-  const [themeName, setThemeName] = useState('astro');
+  const [themeName, setThemeName] = useState(DEFAULT_THEME);
   const [copyMode, setCopyMode] = useState(false);
   // ---- shell approval (run_command gating) ----
   const [pendingApproval, setPendingApproval] = useState<{ command: string; resolve: (d: ApprovalDecision) => void } | null>(null);
