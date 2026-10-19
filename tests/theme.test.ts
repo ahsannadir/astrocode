@@ -63,7 +63,7 @@ test('themes: palettes are truecolor hex, not terminal-palette names', () => {
 });
 
 test('themes: each palette has its own dominant hue', () => {
-  // Thirteen themes that all lean on the same cyan-magenta-green triple read as
+  // Fourteen themes that all lean on the same cyan-magenta-green triple read as
   // one theme. Primary hues (the border/banner color) must stay far enough
   // apart to tell palettes apart at a glance. `noir` is achromatic by design.
   const hue = (hex: string): number => {

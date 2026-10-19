@@ -16,7 +16,7 @@
  *
  * Each theme is one dominant hue plus two accents, and every color clears
  * 4.5:1 contrast against a near-black pane (`tests/theme.test.ts` enforces
- * both). That is what keeps thirteen palettes from collapsing into the same
+ * both). That is what keeps fourteen palettes from collapsing into the same
  * cyan-and-magenta soup.
  */
 
@@ -273,6 +273,17 @@ export const THEMES: Record<string, Theme> = {
     muted: '#9aa58a',
     ok: '#7ee08a',
     fail: '#ff7a6b',
+  }),
+
+  // Cut geode: violet crystal, aqua facet, candlelit gold.
+  amethyst: mk({
+    primary: '#e066ff',
+    secondary: '#7fe3d4',
+    accent: '#ffd36e',
+    body: '#f3e9ff',
+    muted: '#a99ac2',
+    ok: '#8ee6a8',
+    fail: '#ff6f8a',
   }),
 };
 
