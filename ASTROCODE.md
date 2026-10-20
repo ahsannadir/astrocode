@@ -63,6 +63,20 @@ conventions, build commands, and anything the agent should always know here.
   `existingCustomConfig`); reuse never rewrites the config file.
 
 ## Feature map (v1.3+)
+- **@file mentions** (`src/tui/mention.ts` pure syntax, `src/files.ts` index +
+  attachments): typing `@` at a word start opens a picker over the workspace
+  file index (`git ls-files` when available, else a bounded walk that reuses
+  `SKIP` from repomap.ts; cached per cwd). `mentionAt` takes value+caret, so
+  the token is the whole `@…` run even when the caret is mid-path; emails
+  (`a@b`) never match. `rankMentionFiles` scores exact > basename prefix >
+  basename substring > path substring > subsequence. Tab/Enter insert via
+  `applyMention` (one trailing space); Esc only closes. On submit,
+  `extractMentions` + `readMentionAttachments` append a bounded
+  `<mentioned_files>` block to the USER message (5 files, 24k chars each, 48k
+  total; escaping/binary/unreadable paths skipped) and post a 📎 receipt;
+  `stripMentionBlock` keeps reloaded sessions showing the typed sentence. The
+  picker shares the slash menu's layout reservation (only one menu is ever
+  open), so `computeLayout`'s slash fields describe either menu.
 - **Swarm Mode** (`src/swarm.ts`, tool `swarm`, command `/swarm`): parallel
   worktree-isolated workers; workers execute tools with `cwd` redirected to
   `worktreeCwdFor(cwd, worker)`; merges via `worktree.mergeWorktree`.

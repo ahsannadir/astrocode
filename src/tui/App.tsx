@@ -4,6 +4,15 @@ import { Banner } from './Banner.js';
 import { MessageArea, type AgentWorker, type UIItem } from './MessageArea.js';
 import { PromptInput } from './PromptInput.js';
 import { SlashMenu } from './SlashMenu.js';
+import { FileMenu } from './FileMenu.js';
+import {
+  extractMentions,
+  mentionAt,
+  rankMentionFiles,
+  stripMentionBlock,
+  MENTION_SUGGESTIONS,
+} from './mention.js';
+import { listWorkspaceFiles, readMentionAttachments } from '../files.js';
 import { StatusBar } from './StatusBar.js';
 import { TodoPanel } from './TodoPanel.js';
 import { LoginModal, type LoginMeta } from './LoginModal.js';
@@ -92,6 +101,14 @@ export function App({ config, cwd }: Props) {
   const [gitBranch, setGitBranch] = useState('');
   const [slashSel, setSlashSel] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState(false);
+  // ---- @file mention picker ----
+  // `caret` comes from PromptInput (the only component that owns it) so the
+  // token under the cursor can be derived here, next to the slash query —
+  // App owns the match list and the row budget, the input owns the keys.
+  const [caret, setCaret] = useState(0);
+  const [files, setFiles] = useState<string[]>([]);
+  const [fileSel, setFileSel] = useState(0);
+  const [mentionDismissed, setMentionDismissed] = useState(false);
   const [contextTokens, setContextTokens] = useState(0);
   const [contextLimit, setContextLimit] = useState(contextLimitFor(config.model));
   const [, setTodoVersion] = useState(0);
@@ -129,8 +146,30 @@ export function App({ config, cwd }: Props) {
     () => (slashNeedle === null ? [] : filterSlashCommands(slashNeedle)),
     [slashNeedle],
   );
+
+  // ---- @file picker ----
+  // The caret's token decides: `@src/tu` ranks against `src/tu`, a bare `@`
+  // lists the workspace. Matching happens on every keystroke but over a list
+  // cached at boot, so it stays cheap.
+  const mention = mentionAt(input, caret);
+  const mentionQuery = mention === null ? null : mention.query;
+  const mentionMatches = useMemo(
+    () =>
+      mentionQuery === null
+        ? []
+        : rankMentionFiles(mentionQuery, files, MENTION_SUGGESTIONS),
+    [mentionQuery, files],
+  );
+  // Only ONE completion menu is ever open: the file picker is more specific
+  // than the command menu (the caret is inside a token), so it wins and the
+  // slash menu stays closed until the mention is dismissed or completed.
+  const fileMenuActive =
+    mentionQuery !== null && mentionMatches.length > 0 && !mentionDismissed;
   const slashActive =
-    slashNeedle !== null && slashMatches.length > 0 && !slashDismissed;
+    slashNeedle !== null &&
+    slashMatches.length > 0 &&
+    !slashDismissed &&
+    !fileMenuActive;
   // Typing re-opens a dismissed menu, and a changed query re-ranks the list,
   // so reset the highlight to the top match instead of leaving a stale index
   // pointing at a different command than the one the user typed.
@@ -140,6 +179,12 @@ export function App({ config, cwd }: Props) {
   useEffect(() => {
     setSlashSel(0);
   }, [slashNeedle]);
+  useEffect(() => {
+    setMentionDismissed(false);
+  }, [input]);
+  useEffect(() => {
+    setFileSel(0);
+  }, [mentionQuery]);
 
   // ---- layout: reserve every row so the frame never fills the screen ----
   const todos = listTodos();
@@ -147,11 +192,14 @@ export function App({ config, cwd }: Props) {
   // Last overflowing frame height we warned about (-1 = none yet), so the
   // tripwire below stays quiet across re-renders of the same overflowing frame.
   const warnedOverflow = useRef(-1);
+  // The slash fields describe "a completion menu above the prompt": the file
+  // picker shares the same chrome and row budget, and the two never render at
+  // once (see fileMenuActive/slashActive above).
   const layout = computeLayout({
     rows,
     modal,
-    slashActive,
-    slashMatches: slashMatches.length,
+    slashActive: slashActive || fileMenuActive,
+    slashMatches: fileMenuActive ? mentionMatches.length : slashMatches.length,
     todoCount: todos.length,
     approvalPending: pendingApproval !== null,
     queueLength: queue.length,
@@ -169,11 +217,12 @@ export function App({ config, cwd }: Props) {
     settingsList,
     loginList,
   } = layout;
-  // Draw the slash menu only when the budget reserved rows for it, so the
+  // Draw a completion menu only when the budget reserved rows for it, so the
   // rendered tree and the reservation can never disagree. A popup replaces
   // the prompt and a pending approval blocks on a y/a/n decision — neither
   // leaves room for the menu underneath.
-  const slashMenuVisible = slashActive && modal === null && pendingApproval === null;
+  const menuVisible =
+    (slashActive || fileMenuActive) && modal === null && pendingApproval === null;
   // Runtime tripwire for the height budget. `tests/layout.test.ts` proves the
   // invariant across the state space, but it can only test the states someone
   // thought to enumerate — a new component or popup that renders taller than
@@ -188,13 +237,17 @@ export function App({ config, cwd }: Props) {
     warnedOverflow.current = layout.totalHeight;
     console.error(
       `[astrocode] frame height ${layout.totalHeight} >= terminal rows ${rows} ` +
-        `(modal=${modal ?? 'none'} slash=${slashActive} todos=${todos.length} ` +
-        `approval=${pendingApproval !== null} queue=${queue.length}). ` +
+        `(modal=${modal ?? 'none'} menu=${slashActive ? 'slash' : fileMenuActive ? 'file' : 'none'} ` +
+        `todos=${todos.length} approval=${pendingApproval !== null} queue=${queue.length}). ` +
         `Ink will direct-write and the next identical frame will not repaint. ` +
         `Check src/tui/layout.ts against the render tree.`,
     );
-  }, [layout, rows, modal, slashActive, pendingApproval, queue.length, todos.length]);
+  }, [layout, rows, modal, slashActive, fileMenuActive, pendingApproval, queue.length, todos.length]);
   const sel = Math.max(0, Math.min(slashSel, Math.max(0, slashMatches.length - 1)));
+  const fileSelIndex = Math.max(
+    0,
+    Math.min(fileSel, Math.max(0, mentionMatches.length - 1)),
+  );
   const moveSlash = useCallback((dir: 1 | -1) => {
     setSlashSel((s) => {
       const n = slashMatches.length;
@@ -202,6 +255,13 @@ export function App({ config, cwd }: Props) {
       return (s + dir + n) % n;
     });
   }, [slashMatches.length]);
+  const moveFile = useCallback((dir: 1 | -1) => {
+    setFileSel((s) => {
+      const n = mentionMatches.length;
+      if (n === 0) return s;
+      return (s + dir + n) % n;
+    });
+  }, [mentionMatches.length]);
 
   // ---- refs ----
   const itemsRef = useRef<UIItem[]>([]);
@@ -260,6 +320,9 @@ export function App({ config, cwd }: Props) {
       repoMapRef.current = r.text;
       bump();
     });
+    // File index for the @ picker: one call at boot, cached in files.ts so
+    // keystrokes never touch the filesystem.
+    listWorkspaceFiles(cwd).then((idx) => setFiles(idx.files));
     // Open Tool Bus: connect configured MCP servers + load skills so their
     // tools/catalog are live before the first turn.
     connectAllMcp(cwd).then(({ connected, failed }) => {
@@ -709,6 +772,24 @@ export function App({ config, cwd }: Props) {
     [pushItem],
   );
 
+  /**
+   * Turn `@path` mentions into content the model receives with this message.
+   * The typed line is preserved and the block is appended after it, so the
+   * sentence the user wrote is what history displays (stripMentionBlock).
+   * Bounded in files.ts; unreadable/escaping paths are skipped there.
+   */
+  const attachMentionedFiles = useCallback(
+    async (text: string): Promise<{ content: string; paths: string[] }> => {
+      if (!text.includes('@')) return { content: text, paths: [] };
+      const attached = await readMentionAttachments(extractMentions(text), cwd);
+      return {
+        content: attached.text ? `${text}\n\n${attached.text}` : text,
+        paths: attached.paths,
+      };
+    },
+    [cwd],
+  );
+
   // ---- agent ----
   const handleSubmit = useCallback(
     async (raw: string) => {
@@ -793,7 +874,9 @@ export function App({ config, cwd }: Props) {
           // Rebuild a compact transcript of the loaded conversation.
           for (const m of s.messages ?? []) {
             if (m.role === 'user' && m.content) {
-              pushItem({ kind: 'user', text: m.content });
+              // Stored turns may carry the @file attachment block; the
+              // transcript should show what the user typed, not the files.
+              pushItem({ kind: 'user', text: stripMentionBlock(m.content) });
             } else if (m.role === 'assistant' && m.content) {
               pushItem({ kind: 'assistant', text: m.content });
             }
@@ -873,12 +956,21 @@ export function App({ config, cwd }: Props) {
         return;
       }
 
-      // Normal user turn
+      // Normal user turn. Any @file mentions are attached as content the
+      // model sees in this message; the transcript shows the typed line and a
+      // one-line receipt, so nothing lands in context invisibly.
+      const attached = await attachMentionedFiles(value);
       pushItem({ kind: 'user', text: value });
-      convRef.current.push({ role: 'user', content: value });
+      if (attached.paths.length > 0) {
+        pushItem({
+          kind: 'system',
+          text: `📎 attached ${attached.paths.length} file${attached.paths.length === 1 ? '' : 's'}: ${attached.paths.join(', ')}`,
+        });
+      }
+      convRef.current.push({ role: 'user', content: attached.content });
       await runAgentRef.current?.();
     },
-    [pushItem, setModel, setModal, exit, runAgentRef, sessionName, cwd, contextTokens, setSessionName, enqueuePrompt, openLogin],
+    [pushItem, setModel, setModal, exit, runAgentRef, sessionName, cwd, contextTokens, setSessionName, enqueuePrompt, openLogin, attachMentionedFiles],
   );
 
   /**
@@ -1243,12 +1335,19 @@ export function App({ config, cwd }: Props) {
       const next = queueRef.current.shift();
       if (next !== undefined) {
         setQueue([...queueRef.current]);
+        const attached = await attachMentionedFiles(next);
         pushItem({ kind: 'user', text: next });
-        convRef.current.push({ role: 'user', content: next });
+        if (attached.paths.length > 0) {
+          pushItem({
+            kind: 'system',
+            text: `📎 attached ${attached.paths.length} file${attached.paths.length === 1 ? '' : 's'}: ${attached.paths.join(', ')}`,
+          });
+        }
+        convRef.current.push({ role: 'user', content: attached.content });
         void runAgentRef.current?.();
       }
     }
-  }, [cwd, pushItem, bump, buildSystemPrompt, setModel]);
+  }, [cwd, pushItem, bump, buildSystemPrompt, setModel, attachMentionedFiles]);
   runAgentRef.current = runAgent;
 
 
@@ -1293,10 +1392,18 @@ export function App({ config, cwd }: Props) {
           {todoMaxRows > 0 && (
             <TodoPanel todos={todos} maxRows={todoMaxRows} width={width - 4} />
           )}
-          {slashMenuVisible && (
-            // width-2: this section sits inside the marginX={1} wrapper.
-            <SlashMenu matches={slashMatches} sel={sel} width={width - 2} maxRows={slashRowCap} />
-          )}
+          {menuVisible &&
+            (fileMenuActive ? (
+              // width-2: this section sits inside the marginX={1} wrapper.
+              <FileMenu
+                matches={mentionMatches}
+                sel={fileSelIndex}
+                width={width - 2}
+                maxRows={slashRowCap}
+              />
+            ) : (
+              <SlashMenu matches={slashMatches} sel={sel} width={width - 2} maxRows={slashRowCap} />
+            ))}
           {queue.length > 0 && (
             <Box paddingX={1}>
               <Text color={theme.thinking}>
@@ -1319,7 +1426,7 @@ export function App({ config, cwd }: Props) {
               borderStyle="round"
               borderColor={mode === 'plan' ? theme.plan : theme.promptSymbol}
               paddingX={1}
-              marginTop={slashMenuVisible ? 1 : 0}
+              marginTop={menuVisible ? 1 : 0}
             >
               <PromptInput
                 value={input}
@@ -1335,6 +1442,11 @@ export function App({ config, cwd }: Props) {
                 slashSel={sel}
                 onSlashMove={moveSlash}
                 onSlashDismiss={() => setSlashDismissed(true)}
+                fileMatches={fileMenuActive ? mentionMatches : []}
+                fileSel={fileSelIndex}
+                onFileMove={moveFile}
+                onFileDismiss={() => setMentionDismissed(true)}
+                onCaret={setCaret}
                 onCopyMode={() => {
                   if (!busy) setCopyMode(true);
                 }}

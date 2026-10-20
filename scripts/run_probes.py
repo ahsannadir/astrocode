@@ -38,6 +38,7 @@ ASSERTION_PROBES = [
     "probe_modals.py",  # popup tour: /theme, /settings, /login
     "probe_models_esc.py",  # /models: always escapable, empty list included
     "probe_login_reuse.py",  # /login: reuse a saved custom endpoint
+    "probe_mentions.py",  # @file picker: open, Tab, Esc, email boundary, attach
 ]
 
 # Scripts that print facts for a human instead of asserting — they cannot

@@ -113,6 +113,13 @@ You: add rate limiting to the login endpoint
 ❯ astrocode
 ```
 
+Type `@` at the start of a word to mention a file. The picker ranks the  
+workspace — the git index when the directory is a repo, otherwise a bounded  
+walk — and `↑`/`↓` browse, `Tab` or `Enter` completes the path, `Esc` closes  
+it without clearing the line. On submit the mentioned files are read into the  
+message the model receives (up to five files, truncated at 24k characters  
+each) and a `📎 attached …` line in the transcript names what went in.
+
 The agent doesn't lock you out while it works. **Enter queues** your next prompt  
 for when the current turn ends; **Esc interrupts** mid-turn and keeps your typed  
 text for editing. `!cmd` runs a shell command yourself — outside the agent's  

@@ -12,6 +12,7 @@ import {
 } from './inputEdit.js';
 import { resolveSlashSubmission } from '../commands/slash.js';
 import type { SlashCommandDef } from '../commands/slash.js';
+import { applyMention, mentionAt } from './mention.js';
 
 interface Props {
   value: string;
@@ -40,6 +41,18 @@ interface Props {
   onSlashDismiss?: () => void;
   /** Enter text-selection mode over the chat area (Ctrl+K). */
   onCopyMode?: () => void;
+  /**
+   * Files matching the `@` token under the caret (empty when the picker is
+   * closed). Owned by App so the row budget can reserve space for the menu.
+   */
+  fileMatches: string[];
+  /** Currently highlighted file index. */
+  fileSel: number;
+  onFileMove: (dir: 1 | -1) => void;
+  /** Esc with the `@` picker open: close it but keep the line. */
+  onFileDismiss?: () => void;
+  /** Report the caret so App can tell which `@` token it sits in. */
+  onCaret?: (cursor: number) => void;
 }
 
 /**
@@ -59,6 +72,15 @@ interface Props {
  * - Esc closes the menu but KEEPS the line; Esc again (menu closed) clears it.
  * - ←/→ are plain caret movement — they no longer hijack a normal editing
  *   key to accept a suggestion.
+ *
+ * @file picker key model — the same one-key-per-intent shape:
+ * - Typing `@` at the start of a word opens the picker for the token under
+ *   the caret (App owns the match list; the caret lives here).
+ * - ↑/↓ browse, Tab or Enter inserts the highlighted path and closes the
+ *   picker. Enter only inserts while the token is still PARTIAL — once the
+ *   line already names the selected file, Enter submits normally.
+ * - Esc closes the picker and keeps the line; the slash menu (if any) closes
+ *   on the next Esc, and a third Esc clears.
  *
  * Terminals (and PTY batching) coalesce rapid keypresses into one input
  * chunk, so Backspace×3 can arrive as `\x7f\x7f\x7f` and ↑↑ as
@@ -83,6 +105,11 @@ export function PromptInput({
   onSlashMove,
   onSlashDismiss,
   onCopyMode,
+  fileMatches,
+  fileSel,
+  onFileMove,
+  onFileDismiss,
+  onCaret,
 }: Props) {
   const [cursor, setCursor] = useState(value.length);
   const [histIdx, setHistIdx] = useState<number | null>(null);
@@ -93,6 +120,17 @@ export function PromptInput({
   // Clamp the cursor whenever the value changes externally (history recall,
   // autocomplete, programmatic clear). Effect-free: computed per render.
   const clamped = Math.min(Math.max(0, cursor), value.length);
+
+  // The `@` picker owns the caret's token: App passes an empty list when the
+  // menu is closed or dismissed, so a non-empty list IS the open state.
+  const mention = mentionAt(value, clamped);
+  const fileActive = fileMatches.length > 0 && mention !== null;
+
+  // Report caret movement up: App derives the mention token from the same
+  // value + caret pair, exactly like it derives slash matches from the line.
+  useEffect(() => {
+    onCaret?.(clamped);
+  }, [clamped, onCaret]);
 
   /**
    * Complete the highlighted command into the line (Tab), caret at the end.
@@ -107,6 +145,19 @@ export function PromptInput({
     const next = m.name + argPart;
     onChange(next);
     setCursor(next.length);
+  };
+
+  /**
+   * Accept the highlighted file (Tab / Enter). Replaces the whole `@` token
+   * and leaves a trailing space, caret after it.
+   */
+  const acceptMention = (from: string, at: number): boolean => {
+    const file = fileMatches[fileSel] ?? fileMatches[0];
+    if (!file) return false;
+    const r = applyMention(from, at, file);
+    onChange(r.value);
+    setCursor(r.cursor);
+    return true;
   };
 
   useInput(
@@ -178,6 +229,13 @@ export function PromptInput({
           onAbort?.();
           return;
         }
+        // The `@` picker is the innermost overlay, so it closes first — but
+        // it never clears the line. Same rule as the slash menu: Esc means
+        // "close this menu", not "throw away what I typed".
+        if (fileActive) {
+          onFileDismiss?.();
+          return;
+        }
         if (slashActive) {
           onSlashDismiss?.();
           return;
@@ -222,6 +280,13 @@ export function PromptInput({
 
       // ---- submit / slash selection ----
       if (key.return) {
+        // An open `@` picker means the path is still being typed: Enter
+        // completes it. If the token already IS the selected path (typed in
+        // full), Enter submits instead — never a half-written filename.
+        if (fileActive && mention !== null && mention.query !== fileMatches[fileSel]) {
+          acceptMention(value, clamped);
+          return;
+        }
         if (slashActive) {
           // Run, don't merely complete: the full typed command wins, else the
           // highlighted one. App routes this (queue while busy / run now).
@@ -241,6 +306,10 @@ export function PromptInput({
       const nUp = countArrow(input, 'up');
       if (key.upArrow || nUp > 0) {
         const n = Math.max(1, nUp);
+        if (fileActive) {
+          for (let i = 0; i < n; i++) onFileMove(-1);
+          return;
+        }
         if (slashActive) {
           for (let i = 0; i < n; i++) onSlashMove(-1);
           return;
@@ -259,6 +328,10 @@ export function PromptInput({
       const nDown = countArrow(input, 'down');
       if (key.downArrow || nDown > 0) {
         const n = Math.max(1, nDown);
+        if (fileActive) {
+          for (let i = 0; i < n; i++) onFileMove(1);
+          return;
+        }
         if (slashActive) {
           for (let i = 0; i < n; i++) onSlashMove(1);
           return;
@@ -279,8 +352,12 @@ export function PromptInput({
         return;
       }
 
-      // ---- Tab: complete the highlighted command (then type arguments) ----
+      // ---- Tab: complete the highlighted command or file ----
       if (key.tab) {
+        if (fileActive) {
+          acceptMention(value, clamped);
+          return;
+        }
         if (slashActive) completeHighlighted(value);
         return;
       }

@@ -20,7 +20,7 @@ export interface RepoMapResult {
   pruned: boolean;
 }
 
-const SKIP = new Set([
+export const SKIP = new Set([
   'node_modules', '.git', 'dist', 'build', '.next', '.nuxt', '.turbo',
   '.svelte-kit', '.cache', 'coverage', '.astro', '.gradle', 'target',
   '__pycache__', '.venv', 'venv', '.mypy_cache', '.pytest_cache',
