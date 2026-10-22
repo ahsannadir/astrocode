@@ -53,6 +53,12 @@ interface Props {
   onFileDismiss?: () => void;
   /** Report the caret so App can tell which `@` token it sits in. */
   onCaret?: (cursor: number) => void;
+  /**
+   * Tab with no completion menu open flips between Plan and Act. The menus
+   * keep Tab for completing what they list — mode switching only happens when
+   * neither an `@` picker nor the slash menu owns the key.
+   */
+  onToggleMode?: () => void;
 }
 
 /**
@@ -69,7 +75,8 @@ interface Props {
  *   longer one it is a prefix of, and a partial `/he` runs `/help`
  *   immediately.
  * - Tab completes the highlighted name into the line (caret at the end) so
- *   arguments can be typed right away.
+ *   arguments can be typed right away; with the menu closed, Tab switches
+ *   between Plan and Act mode.
  * - Esc closes the menu but KEEPS the line; Esc again (menu closed) clears it.
  * - ←/→ are plain caret movement — they no longer hijack a normal editing
  *   key to accept a suggestion.
@@ -111,6 +118,7 @@ export function PromptInput({
   onFileMove,
   onFileDismiss,
   onCaret,
+  onToggleMode,
 }: Props) {
   const [cursor, setCursor] = useState(value.length);
   const [histIdx, setHistIdx] = useState<number | null>(null);
@@ -354,12 +362,17 @@ export function PromptInput({
       }
 
       // ---- Tab: complete the highlighted command or file ----
+      // With no completion menu open, Tab is the Plan ↔ Act switch.
       if (key.tab) {
         if (fileActive) {
           acceptMention(value, clamped);
           return;
         }
-        if (slashActive) completeHighlighted(value);
+        if (slashActive) {
+          completeHighlighted(value);
+          return;
+        }
+        onToggleMode?.();
         return;
       }
 

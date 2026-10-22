@@ -127,8 +127,10 @@ view and outside its context.
 
 Two modes decide what the agent may touch. Plan mode is read-only: reads,  
 searches, and proposals, with writes and commands blocked at the tool layer  
-rather than discouraged in the prompt. The interaction-mode row in `/settings`  
-switches between plan and act. The status bar always shows which one you're in.
+rather than discouraged in the prompt. Press `Tab` in the prompt (with no  
+completion menu open) to flip between plan and act, or use the  
+interaction-mode row in `/settings`. The status bar always shows which one  
+you're in.
 
 Shell commands are guarded the same way. In `dangerous` or `all` approval mode,  
 `run_command` asks before executing: `y` runs once, `a` always allows that  

@@ -740,7 +740,7 @@ export function App({ config, cwd }: Props) {
         'I can read, write, edit, and explore code, run commands, and map your repo — right from this terminal.\n\n' +
         '- Type **/** to browse commands · **/help** lists everything\n' +
         '- Press **Ctrl+K** to select & copy transcript text\n' +
-        '- Open **/settings** to switch between act and plan mode',
+        '- Press **Tab** to switch between act and plan mode (or use /settings)',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1382,6 +1382,7 @@ export function App({ config, cwd }: Props) {
                 onFileMove={moveFile}
                 onFileDismiss={() => setMentionDismissed(true)}
                 onCaret={setCaret}
+                onToggleMode={handleCycleMode}
                 onCopyMode={() => {
                   if (!busy) setCopyMode(true);
                 }}

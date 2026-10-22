@@ -155,6 +155,7 @@ Modes
 ────────────────────────────
 • plan — read-only; agent explores & proposes a plan (write/edit/run blocked).
 • act  — full access; agent implements changes (default).
+• Press Tab in the prompt (menus closed) to flip between plan and act.
 
 Tips
 ────────────────────────────
