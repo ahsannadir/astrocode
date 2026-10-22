@@ -9,7 +9,6 @@ import {
   extractMentions,
   mentionAt,
   rankMentionFiles,
-  stripMentionBlock,
   MENTION_SUGGESTIONS,
 } from './mention.js';
 import { listWorkspaceFiles, readMentionAttachments } from '../files.js';
@@ -34,7 +33,6 @@ import type { ToolProgressEvent } from '../tools/registry.js';
 import { runSlashCommand, filterSlashCommands, SLASH_SAFE_WHILE_BUSY } from '../commands/slash.js';
 import { runShell } from '../tools/shell.js';
 import {
-  revertLast,
   markTurnBoundary,
   changesSinceLastBoundary,
   rewindTurn,
@@ -625,7 +623,7 @@ export function App({ config, cwd }: Props) {
   );
 
   const handleCycleMode = useCallback(() => {
-    // Mode is session state (like /plan) — not persisted.
+    // Mode is session state (like plan mode) — not persisted.
     setMode(modeRef.current === 'plan' ? 'act' : 'plan');
   }, [setMode]);
 
@@ -742,7 +740,7 @@ export function App({ config, cwd }: Props) {
         'I can read, write, edit, and explore code, run commands, and map your repo — right from this terminal.\n\n' +
         '- Type **/** to browse commands · **/help** lists everything\n' +
         '- Press **Ctrl+K** to select & copy transcript text\n' +
-        '- Use **/plan** to think it through; **/settings** switches back to act',
+        '- Open **/settings** to switch between act and plan mode',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -756,7 +754,7 @@ export function App({ config, cwd }: Props) {
           kind: 'system',
           text:
             "Slash commands can't be queued — this one needs the agent to be idle.\n" +
-            'Info commands (/help, /cost, /status, /context, /tools, …) still run mid-turn.',
+            'Info commands (/help, /cost, /status, /context, …) still run mid-turn.',
         });
         return;
       }
@@ -847,9 +845,6 @@ export function App({ config, cwd }: Props) {
           exit();
           return;
         }
-        if (res.mode) {
-          setMode(res.mode);
-        }
         if (res.sessionName) {
           setSessionName(res.sessionName);
         }
@@ -866,55 +861,11 @@ export function App({ config, cwd }: Props) {
           // The success line comes from res.message below, so /new
           // reports exactly once.
         }
-        if (res.load) {
-          const s = res.load;
-          convRef.current = s.messages ?? [];
-          itemsRef.current = [];
-          // Rebuild a compact transcript of the loaded conversation.
-          for (const m of s.messages ?? []) {
-            if (m.role === 'user' && m.content) {
-              // Stored turns may carry the @file attachment block; the
-              // transcript should show what the user typed, not the files.
-              pushItem({ kind: 'user', text: stripMentionBlock(m.content) });
-            } else if (m.role === 'assistant' && m.content) {
-              pushItem({ kind: 'assistant', text: m.content });
-            }
-          }
-        }
-        if (res.undo) {
-          const r = await revertLast();
-          pushItem({
-            kind: r.ok ? 'tool_result' : 'error',
-            name: 'undo',
-            ok: r.ok,
-            text: r.text,
-          });
-        }
         if (res.rewind) {
           const r = await rewindTurn();
           pushItem({
             kind: r.ok ? 'tool_result' : 'error',
             name: 'rewind',
-            ok: r.ok,
-            text: r.text,
-          });
-        }
-        if (res.verify) {
-          pushItem({ kind: 'system', text: 'Running project verification (lint/test)…' });
-          const r = await runVerify(cwd);
-          pushItem({
-            kind: r.ok ? 'tool_result' : 'error',
-            name: 'verify',
-            ok: r.ok,
-            text: r.text,
-          });
-        }
-        if (res.autocommit !== undefined) {
-          // A non-empty string is a user-supplied commit message (/commit <msg>).
-          const r = await autoCommit(cwd, res.autocommit || undefined);
-          pushItem({
-            kind: r.ok ? 'tool_result' : 'error',
-            name: 'commit',
             ok: r.ok,
             text: r.text,
           });

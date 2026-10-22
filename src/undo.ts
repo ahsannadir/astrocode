@@ -2,8 +2,8 @@
  * File undo stack for AstroCode.
  *
  * Before every destructive file op (write_file / edit_file) we snapshot the
- * original bytes so the user can revert the most recent change(s) with
- * /undo. The stack lives for the life of the process (module-level).
+ * original bytes so the most recent change(s) can be reverted. The stack
+ * lives for the life of the process (module-level).
  */
 import { promises as fs } from 'node:fs';
 
@@ -16,7 +16,7 @@ export interface Snapshot {
 const stack: Snapshot[] = [];
 const MAX = 100;
 
-/** Called by write/edit tools *before* mutating, to enable /undo. */
+/** Called by write/edit tools *before* mutating, to enable revert/rewind. */
 export async function snapshotFile(fp: string): Promise<void> {
   let content: string | null = null;
   let hadFile = false;
@@ -56,7 +56,7 @@ export async function revertLast(): Promise<{ ok: boolean; text: string }> {
 // Before each agent turn we mark a boundary in the snapshot stack. /rewind
 // then reverts EVERY snapshot taken since that boundary — restoring the whole
 // working tree to its pre-turn state (including files created during the turn),
-// which is broader than the single-file /undo.
+// which is broader than reverting a single file.
 
 const boundaries: number[] = [];
 

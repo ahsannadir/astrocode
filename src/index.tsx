@@ -35,7 +35,7 @@ ENVIRONMENT
   ASTROCODE_THEME      Color theme (amethyst, astro, aurora, citrus, cyberpunk,
                        dracula, forest, inferno, matrix, nebula, noir, ocean,
                        sunset, synthwave)
-  ASTROCODE_SESSION_DIR  Where /save sessions are stored (default ~/.astrocode/sessions)
+  ASTROCODE_SESSION_DIR  Where saved sessions are stored (default ~/.astrocode/sessions)
   ASTROCODE_SERVE_WRITES Allow mutating tools over the MCP bus (1 = on; default read-only)
 
 EXAMPLES
@@ -46,10 +46,10 @@ EXAMPLES
   astrocode serve   # then point any MCP client (e.g. Claude Code) at it
 
 SLASH COMMANDS
-  /help /login /model /settings /theme /plan /save
-  /load /sessions /new /undo /rewind /review /verify /commit /cost /tools
-  /agents /swarm /mcp /skills /recall /context /memory /map /todo
-  /status /stars /whoami /delete /exit`;
+  /help /login /model /settings /theme /sessions
+  /new /rewind /review /cost /agents /swarm /mcp
+  /skills /context /memory /map /todo
+  /status /stars /whoami /exit`;
 
 function printBanner() {
   // ANSI colors for a nice non-interactive print.

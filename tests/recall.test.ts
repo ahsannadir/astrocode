@@ -1,5 +1,5 @@
 /**
- * Unit tests for /recall retrieval over saved sessions (src/recall.ts).
+ * Unit tests for recall retrieval over saved sessions (src/recall.ts).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

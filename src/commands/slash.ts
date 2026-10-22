@@ -1,21 +1,13 @@
 import type { AppConfig, ChatMessage, PlanMode } from '../types.js';
-import { getToolNames, executeTool, PLAN_ALLOWED_TOOLS } from '../tools/registry.js';
-import {
-  saveSession,
-  loadSession,
-  listSessions,
-  deleteSession,
-  type SessionData,
-} from '../sessions.js';
-import { revertLast, undoCount, rewindTurn, changesSinceLastBoundary } from '../undo.js';
+import { executeTool } from '../tools/registry.js';
+import { listSessions } from '../sessions.js';
+import { rewindTurn, changesSinceLastBoundary } from '../undo.js';
 import { formatCost, pricingFor, contextLimitFor } from '../cost.js';
 import { loadMemory, getMemoryText, getMemorySources, reloadMemory } from '../memory.js';
 import { buildRepoMap, getRepoMap } from '../repomap.js';
 import { listTodos, clearTodos, todoCounts, todoBlock } from '../todos.js';
 import { SUBAGENT_ROLES, SUBAGENT_ROLE_NAMES } from '../subagent.js';
 import { getAgentHistory } from '../agents.js';
-import { recallSessions } from '../recall.js';
-import { detectScripts, runVerify, autoCommit } from '../verify.js';
 import { lastSwarmSummary, swarmCleanup } from '../swarm.js';
 
 export interface SlashCommandDef {
@@ -35,22 +27,9 @@ export interface SlashResult {
   model?: string;
   /** If true, clear the conversation history. */
   clear?: boolean;
-  /** New interaction mode (plan/act). */
-  mode?: PlanMode;
-  /** If true, revert the most recent file change. */
-  undo?: boolean;
   /** If true, rewind the whole last turn (checkpoint). */
   rewind?: boolean;
-  /** If true, run post-edit verification (lint/test). */
-  verify?: boolean;
-  /**
-   * If set, auto-commit current changes. A string carries a custom commit
-   * message (from `/commit <msg>`); an empty string means "use the default".
-   */
-  autocommit?: string;
-  /** A session to restore into the conversation (from /load). */
-  load?: SessionData | null;
-  /** Current session name (e.g. after /save or /new). */
+  /** Current session name (e.g. after /new). */
   sessionName?: string;
   /** If true, open the interactive provider-login popup (from /login). */
   login?: boolean;
@@ -83,20 +62,14 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: '/model', description: 'Pick a model from the connected provider', usage: '/model' },
   { name: '/settings', description: 'Open the settings menu', usage: '/settings' },
   { name: '/theme', description: 'Pick a color theme', usage: '/theme' },
-  { name: '/plan', description: 'Switch to plan mode (read-only analysis)', usage: '/plan' },
-  { name: '/save', description: 'Save this conversation to disk', usage: '/save [name]' },
-  { name: '/load', description: 'Resume a saved conversation', usage: '/load <name>' },
   { name: '/sessions', description: 'List saved sessions', usage: '/sessions' },
   { name: '/new', description: 'Start a fresh conversation', usage: '/new [name]' },
-  { name: '/undo', description: 'Revert the last file change', usage: '/undo' },
   { name: '/review', description: 'Show git diff of your changes', usage: '/review' },
   { name: '/cost', description: 'Show token & spend for this session', usage: '/cost' },
-  { name: '/tools', description: 'List available agent tools', usage: '/tools' },
   { name: '/agents', description: 'List sub-agent roles & recent spawns', usage: '/agents' },
   { name: '/swarm', description: 'Run parallel worktree-isolated agents on a decomposed goal', usage: '/swarm <goal> [--no-plan]' },
   { name: '/mcp', description: 'Show MCP servers (Open Tool Bus) & their tools; --connect to (re)connect', usage: '/mcp [--connect]' },
   { name: '/skills', description: 'List skills (progressive-disclosure packages); /skills add <name> scaffolds one', usage: '/skills [add <name>|reload]' },
-  { name: '/recall', description: 'Search saved sessions for past work', usage: '/recall <query>' },
   {
     name: '/status',
     description: 'Show environment / connection info',
@@ -104,13 +77,10 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   },
   { name: '/stars', description: 'Deploy stardust', usage: '/stars' },
   { name: '/whoami', description: 'Introspect the agent', usage: '/whoami' },
-  { name: '/delete', description: 'Delete a saved session', usage: '/delete <name>' },
   { name: '/memory', description: 'Show project memory (ASTROCODE.md)', usage: '/memory [reload]' },
   { name: '/map', description: 'Build & show the repo map', usage: '/map' },
   { name: '/todo', description: 'Show the live task list', usage: '/todo' },
   { name: '/rewind', description: 'Revert the whole last turn', usage: '/rewind' },
-  { name: '/verify', description: 'Run lint/test on your changes', usage: '/verify' },
-  { name: '/commit', description: 'Auto-commit current changes', usage: '/commit [msg]' },
   { name: '/context', description: 'Show context-window usage', usage: '/context' },
   { name: '/exit', description: 'Quit AstroCode', usage: '/exit' },
 ];
@@ -124,7 +94,6 @@ export const SLASH_SAFE_WHILE_BUSY: ReadonlySet<string> = new Set([
   '/help',
   '/cost',
   '/status',
-  '/tools',
   '/agents',
   '/todo',
   '/context',
@@ -192,7 +161,7 @@ Tips
 • Type "/" to open the command menu: ↑/↓ browse every command, Enter runs the
   highlighted one, Tab completes it into the line so you can add arguments.
 • While the agent is working, menu navigation still works and informational
-  commands (/help, /cost, /status, /context, /tools, …) run immediately.
+  commands (/help, /cost, /status, /context, …) run immediately.
 • Type /login to connect OpenAI, Anthropic, InferX, AgentRouter, ZenMux, TokenRouter, or OpenRouter with an interactive popup.
 • Type /model to pick a model from your connected provider.
 • Type /settings to open the settings menu (mode, verify, auto-commit, turns, budget).
@@ -206,7 +175,7 @@ Tips
 • !<cmd> runs a shell command yourself (agent not involved), e.g. !git status.
 • ↑/↓ in the prompt recall history · PgUp/PgDn scroll the transcript.
 • Set ASTROCODE_API_KEY / ASTROCODE_MODEL / ASTROCODE_BASE_URL for a live model.
-• ASTROCODE_BUDGET caps spending; /undo reverts the last file change.`;
+• ASTROCODE_BUDGET caps spending; /rewind reverts the last turn.`;
 
 export async function runSlashCommand(
   raw: string,
@@ -227,50 +196,10 @@ export async function runSlashCommand(
       return { handled: true, settings: true };
     case '/theme':
       return { handled: true, theme: true };
-    case '/plan':
-      return {
-        handled: true,
-        mode: 'plan',
-        message: 'Switched to PLAN mode — I will analyze and propose a plan using read-only tools only.',
-      };
-    case '/save': {
-      const name = arg || ctx.sessionName || 'session';
-      if (ctx.messages.length === 0) {
-        return { handled: true, message: 'Nothing to save — the conversation is empty.' };
-      }
-      const saved = await saveSession(name, {
-        cwd: ctx.cwd,
-        model: ctx.config.model,
-        mode: ctx.mode,
-        createdAt: new Date().toISOString(),
-        messages: ctx.messages,
-      });
-      return {
-        handled: true,
-        sessionName: saved.name,
-        message: `Saved ${saved.messages.length} message(s) as "${saved.name}".\nUse /load ${saved.name} to resume later.`,
-      };
-    }
-
-    case '/load': {
-      if (!arg) {
-        return { handled: true, message: 'Usage: /load <name>\nSee /sessions to list saved sessions.' };
-      }
-      const session = await loadSession(arg);
-      if (!session) {
-        return { handled: true, message: `No saved session named "${arg}".\nSee /sessions to list saved sessions.` };
-      }
-      return {
-        handled: true,
-        load: session,
-        sessionName: session.name,
-        message: `Resumed "${session.name}" (${session.messages.length} messages, model ${session.model}).`,
-      };
-    }
     case '/sessions': {
       const list = await listSessions();
       if (list.length === 0) {
-        return { handled: true, message: 'No saved sessions yet. Use /save <name> to create one.' };
+        return { handled: true, message: 'No saved sessions yet.' };
       }
       const body = list
         .map(
@@ -287,22 +216,6 @@ export async function runSlashCommand(
         sessionName: arg || 'session',
         message: 'Started a new conversation.',
       };
-    case '/delete': {
-      if (!arg) {
-        return { handled: true, message: 'Usage: /delete <name>' };
-      }
-      const ok = await deleteSession(arg);
-      return {
-        handled: true,
-        message: ok ? `Deleted session "${arg}".` : `No session named "${arg}" to delete.`,
-      };
-    }
-    case '/undo': {
-      if (undoCount() === 0) {
-        return { handled: true, undo: true, message: 'Nothing to undo — no file changes were made.' };
-      }
-      return { handled: true, undo: true, message: `${undoCount()} change(s) available to undo.` };
-    }
     case '/review': {
       const res = await executeTool('git_diff', JSON.stringify({}), { cwd: ctx.cwd });
       return { handled: true, message: res.text };
@@ -319,16 +232,6 @@ export async function runSlashCommand(
       };
     }
 
-    case '/tools':
-      return {
-        handled: true,
-        message: `Available tools:\n${getToolNames()
-          .map(
-            (t) =>
-              `  ${ctx.mode === 'plan' && !PLAN_ALLOWED_TOOLS.has(t) ? '(blocked in plan)' : '✦'} ${t}`,
-          )
-          .join('\n')}`,
-      };
     case '/agents': {
       const roles = SUBAGENT_ROLE_NAMES.map((n) => {
         const r = SUBAGENT_ROLES[n];
@@ -349,37 +252,6 @@ export async function runSlashCommand(
       return {
         handled: true,
         message: `Sub-agent roles (${SUBAGENT_ROLE_NAMES.length}):\n${roles}\n\nRecent spawns (this session):\n${body}`,
-      };
-    }
-    case '/recall': {
-      if (!arg) {
-        return {
-          handled: true,
-          message:
-            'Usage: /recall <query>\n' +
-            'Searches your saved sessions (/save) for past work.\n' +
-            'Example: /recall how did we fix the build cache',
-        };
-      }
-      const hits = await recallSessions(arg);
-      if (hits.length === 0) {
-        return {
-          handled: true,
-          message:
-            `No matches for "${arg}" in your saved sessions.\n` +
-            'Use /save <name> to preserve conversations so /recall can find them later.',
-        };
-      }
-      const body = hits
-        .map(
-          (h, i) =>
-            `  ${i + 1}. ${h.name.padEnd(20)} (${h.score.toFixed(1)}) · ${h.messages} msgs · ` +
-            `${new Date(h.updatedAt).toLocaleString()}\n      ${h.snippet}`,
-        )
-        .join('\n');
-      return {
-        handled: true,
-        message: `Top ${hits.length} matches for "${arg}":\n${body}\n\nUse /load <name> to open one.`,
       };
     }
     case '/status':
@@ -461,18 +333,6 @@ export async function runSlashCommand(
         return { handled: true, rewind: true, message: 'No file changes were made in the last turn.' };
       }
       return { handled: true, rewind: true, message: `Rewinding ${pending} change(s) from the last turn…` };
-    }
-    case '/verify': {
-      return { handled: true, verify: true };
-    }
-    case '/commit': {
-      // Pass the custom message through to autoCommit; an empty arg means
-      // "use the generated default message".
-      return {
-        handled: true,
-        autocommit: arg || '',
-        message: arg ? `Committing: ${arg}` : 'Committing current changes…',
-      };
     }
     case '/context': {
       const limit = contextLimitFor(ctx.config.model);

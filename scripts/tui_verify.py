@@ -278,23 +278,22 @@ def main():
             failures.append(f"slash menu did not open:\n{t.screen()}")
 
         # ---- 6. filter, then Enter RUNS the highlighted command in one press ----
-        t.send("pl")
+        t.send("he")
         t.shot("07_slash_filtered")
-        if "/plan" not in t.screen():
+        if "/help" not in t.screen():
             failures.append(f"slash filter failed:\n{t.screen()}")
-        t.key("\r", wait=1.2)  # Enter runs /plan outright (no accept-then-Enter)
+        t.key("\r", wait=1.2)  # Enter runs /help outright (no accept-then-Enter)
         t.shot("08_slash_ran")
 
-        # ---- 7. the mode message confirms that single Enter ran the command ----
-        t.shot("09_plan_ran")
-        if "PLAN mode" not in t.screen():
-            failures.append(f"/plan did not run on one Enter:\n{t.screen()}")
+        # ---- 7. the help message confirms that single Enter ran the command ----
+        t.shot("09_help_ran")
+        if "AstroCode slash commands" not in t.screen():
+            failures.append(f"/help did not run on one Enter:\n{t.screen()}")
 
-        # ---- 8. back to act via /settings, open /theme modal ----
+        # ---- 8. close /settings, open /theme modal ----
         t.send("/settings\r", per_char_delay=0.03)
         t.drain(0.7)
-        t.key("\r", wait=0.5)  # Interaction mode → act
-        t.key("\x1b", wait=0.5)  # close settings
+        t.key("\x1b", wait=0.5)  # close settings without changing mode
         t.send("/theme\r", per_char_delay=0.03)
         t.drain(0.9)
         t.shot("10_theme_modal")

@@ -125,10 +125,10 @@ for when the current turn ends; **Esc interrupts** mid-turn and keeps your typed
 text for editing. `!cmd` runs a shell command yourself — outside the agent's  
 view and outside its context.
 
-Two modes decide what the agent may touch. `/plan` is read-only: reads,  
+Two modes decide what the agent may touch. Plan mode is read-only: reads,  
 searches, and proposals, with writes and commands blocked at the tool layer  
 rather than discouraged in the prompt. The interaction-mode row in `/settings`  
-restores full access. The status bar always shows which one you're in.
+switches between plan and act. The status bar always shows which one you're in.
 
 Shell commands are guarded the same way. In `dangerous` or `all` approval mode,  
 `run_command` asks before executing: `y` runs once, `a` always allows that  
@@ -139,16 +139,16 @@ commands are refused outright unless the model explicitly forces them.
 
 ### Sessions and context
 
-Conversations save to `~/.astrocode/sessions` with their model and mode, and  
-`/recall` searches them through a BM25-style index. Auto-compaction folds old  
+Saved sessions live in `~/.astrocode/sessions` with their model and mode, and  
+`/sessions` lists them. Auto-compaction folds old 
 tool batches into one-line summaries near 85% of the window, and a  
 head-and-tail truncator keeps one huge `read_file` from evicting the  
 conversation. A repo map — tree, file counts, scripts — builds at startup.
 
 ### Safety and reliability
 
-Every write snapshots the original, so `/undo` reverts the last change and  
-`/rewind` restores the tree to before the last turn. `run_command` refuses  
+Every write snapshots the original, so `/rewind` restores the tree to before  
+the last turn. `run_command` refuses  
 `rm -rf /`, `dd`, `mkfs`, force-push, and `reset --hard` unless explicitly  
 forced, and `ASTROCODE_BUDGET` caps spend. Repeated identical tool calls are  
 nudged then blocked with the first result replayed, malformed tool arguments are  

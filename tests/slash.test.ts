@@ -55,7 +55,7 @@ test('filterSlashCommands: prefix matches beat substring matches, stable within 
   const model = filterSlashCommands('mode').map((c) => c.name);
   assert.equal(model[0], '/model');
   // For "s": every name that STARTS with s ranks above names that merely
-  // contain it (/cost, /tools, …).
+  // contain it (/cost, /status, …).
   const s = filterSlashCommands('s').map((c) => c.name);
   const firstContains = s.findIndex((n) => !n.slice(1).toLowerCase().startsWith('s'));
   assert.ok(firstContains > 0, 'there are both prefix and substring matches');
@@ -93,21 +93,32 @@ test('SLASH_SAFE_WHILE_BUSY: every entry is a real, informational command', () =
   const names = new Set(SLASH_COMMANDS.map((c) => c.name));
   for (const n of SLASH_SAFE_WHILE_BUSY) assert.ok(names.has(n), `${n} is a slash command`);
   assert.ok(SLASH_SAFE_WHILE_BUSY.has('/help'));
-  assert.equal(SLASH_SAFE_WHILE_BUSY.has('/plan'), false);
+  assert.equal(SLASH_SAFE_WHILE_BUSY.has('/tools'), false);
 });
 
-test('/commit: passes a custom message through (not just a boolean flag)', async () => {
+test('removed commands are neither registered nor handled', async () => {
+  const removed = [
+    '/act',
+    '/plan',
+    '/save',
+    '/load',
+    '/undo',
+    '/tools',
+    '/delete',
+    '/recall',
+    '/verify',
+    '/commit',
+  ];
+  const names = new Set(SLASH_COMMANDS.map((c) => c.name));
   const ctx = makeCtx([]);
-  const withMsg = await runSlashCommand('/commit fix: tidy the parser', ctx);
-  assert.equal(withMsg.handled, true);
-  assert.equal(withMsg.autocommit, 'fix: tidy the parser');
-  assert.ok(withMsg.message!.includes('fix: tidy the parser'));
-
-  const noMsg = await runSlashCommand('/commit', ctx);
-  assert.equal(noMsg.handled, true);
-  // Empty string = "use the generated default message"; must still trigger a commit.
-  assert.equal(noMsg.autocommit, '');
-  assert.notEqual(noMsg.autocommit, undefined);
+  for (const name of removed) {
+    assert.equal(names.has(name), false, `${name} is not in the command list`);
+    const res = await runSlashCommand(name, ctx);
+    assert.equal(res.handled, true, `${name} is handled as unknown`);
+    assert.equal(res.clear, undefined, `${name} does not clear the conversation`);
+    assert.equal(res.rewind, undefined, `${name} does not rewind`);
+    assert.ok(res.message!.includes('Unknown slash command'), `${name} → unknown command`);
+  }
 });
 
 test('/act, /clear, and /compact are no longer commands', async () => {

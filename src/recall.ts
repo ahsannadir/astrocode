@@ -2,7 +2,7 @@
  * Dependency-free "recall" for AstroCode: BM25-lite retrieval over saved
  * sessions. Lets the agent (and user) ask questions grounded in its own
  * past work — "how did we fix the build cache last month?" — by searching
- * the JSON sessions that /save already persists.
+ * the persisted JSON sessions.
  *
  * Zero dependencies: tokenization + a small BM25 variant with stopword-ish
  * length filtering, plus contextual snippets around the best match.
