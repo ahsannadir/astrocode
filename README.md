@@ -81,7 +81,7 @@ npm run link                   # optional: `astrocode` on your PATH
 
 ## Connecting a model
 
-Start the TUI, run `/login`, pick a provider, paste a key. `/models` then picks  
+Start the TUI, run `/login`, pick a provider, paste a key. `/model` then picks  
 a model. Credentials are saved to `~/.astrocode/config.json` and reconnect  
 automatically on the next launch.
 
@@ -187,7 +187,7 @@ AstroCode's tools over JSON-RPC 2.0 on stdio — read-only unless
 Streamed markdown — headings, tables, task lists, ~30 highlighted languages,  
 colored diffs — wrapped in terminal cells so CJK and emoji behave. Around it: a  
 status bar (mode, model, context %, tasks, spend, branch, cwd), a `todo`-driven  
-task panel, and modals for `/login`, `/models`, `/settings`, and `/theme`;  
+task panel, and modals for `/login`, `/model`, `/settings`, and `/theme`;  
 fourteen themes preview live and `Ctrl+K` copies clean text. Non-TTY stdout prints  
 a banner and exits.
 
@@ -265,7 +265,7 @@ providers and temp dirs, so they're safe in CI.
 `npm run probe` covers what unit tests can't: the keystroke → Ink → frame path.  
 Each probe boots the built CLI in a pty in `--demo`, types real keys, and  
 asserts on the emulated screen — popups opening and closing on `Esc`, the  
-`/models` picker, the `/login` reuse prompt — then the runner stops at the first  
+`/model` picker, the `/login` reuse prompt — then the runner stops at the first  
 failure. `python3 scripts/run_probes.py --list` shows which probes gate a release  
 and which are diagnostics.
 

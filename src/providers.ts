@@ -1,5 +1,5 @@
 /**
- * Provider registry for the /login + /models flows.
+ * Provider registry for the /login + /model flows.
  *
  * Every provider here exposes an OpenAI-compatible `POST /chat/completions`
  * endpoint (Anthropic's OpenAI-compatibility layer maps to the Messages API),

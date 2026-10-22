@@ -98,7 +98,7 @@ export interface LayoutInput {
   approvalPending: boolean;
   /** Number of prompts queued behind a busy agent. */
   queueLength: number;
-  /** Models offered by the active provider (/models). */
+  /** Models offered by the active provider (/model). */
   modelsCount: number;
   /** Themes available (/theme). */
   themesCount: number;
@@ -345,7 +345,7 @@ function buildLayout(input: LayoutInput, bannerH: number): Layout {
     }
     return { cap: room, height: room + chrome, scrolls: true };
   };
-  // /models never collapses to zero list rows: a provider with an empty
+  // /model never collapses to zero list rows: a provider with an empty
   // registry list (an 'OpenAI Compatible' endpoint, whose models are fetched
   // live during /login) renders a one-row "no models" notice in place of the
   // entries. Reserving chrome alone would under-reserve that row by one — the

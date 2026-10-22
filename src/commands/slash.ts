@@ -54,7 +54,7 @@ export interface SlashResult {
   sessionName?: string;
   /** If true, open the interactive provider-login popup (from /login). */
   login?: boolean;
-  /** If true, open the interactive model-picker popup (from /models). */
+  /** If true, open the interactive model-picker popup (from /model). */
   models?: boolean;
   /** If true, open the interactive settings popup (from /settings). */
   settings?: boolean;
@@ -82,7 +82,7 @@ export interface SlashContext {
 export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: '/help', description: 'Show this help', usage: '/help' },
   { name: '/login', description: 'Connect an AI provider (OpenAI · Anthropic · InferX · AgentRouter · ZenMux · TokenRouter · OpenRouter · OpenAI Compatible)', usage: '/login' },
-  { name: '/models', description: 'Pick a model from the connected provider', usage: '/models' },
+  { name: '/model', description: 'Pick a model from the connected provider', usage: '/model' },
   { name: '/settings', description: 'Open the settings menu', usage: '/settings' },
   { name: '/theme', description: 'Pick a color theme', usage: '/theme' },
   { name: '/plan', description: 'Switch to plan mode (read-only analysis)', usage: '/plan' },
@@ -203,7 +203,7 @@ Tips
 • While the agent is working, menu navigation still works and informational
   commands (/help, /cost, /status, /context, /tools, …) run immediately.
 • Type /login to connect OpenAI, Anthropic, InferX, AgentRouter, ZenMux, TokenRouter, or OpenRouter with an interactive popup.
-• Type /models to pick a model from your connected provider.
+• Type /model to pick a model from your connected provider.
 • Type /settings to open the settings menu (mode, verify, auto-commit, turns, budget).
 • Type /theme to pick a color theme — ↑/↓ previews it live, Enter applies, Esc reverts
   (choice persists across launches; ASTROCODE_THEME env wins).
@@ -230,7 +230,7 @@ export async function runSlashCommand(
       return { handled: true, message: HELP_TEXT };
     case '/login':
       return { handled: true, login: true };
-    case '/models':
+    case '/model':
       return { handled: true, models: true };
     case '/settings':
       return { handled: true, settings: true };

@@ -36,7 +36,7 @@ DEFAULT_TIMEOUT = 420  # generous: each probe boots the app several times
 # Probes that assert and exit non-zero on regression, in run order.
 ASSERTION_PROBES = [
     "probe_modals.py",  # popup tour: /theme, /settings, /login
-    "probe_models_esc.py",  # /models: always escapable, empty list included
+    "probe_models_esc.py",  # /model: always escapable, empty list included
     "probe_login_reuse.py",  # /login: reuse a saved custom endpoint
     "probe_mentions.py",  # @file picker: open, Tab, Esc, email boundary, attach
 ]

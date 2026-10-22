@@ -119,7 +119,7 @@ test('providers: tokenrouter ships routing modes and the kimi-k3-free model', ()
   for (const mode of ['auto:balance', 'auto:cost', 'auto:quality', 'auto:latency']) {
     assert.ok(tr.models.includes(mode), `tokenrouter missing ${mode}`);
   }
-  // The user-requested model must be selectable from /models.
+  // The user-requested model must be selectable from /model.
   assert.ok(
     tr.models.includes('moonshotai/kimi-k3-free'),
     'tokenrouter missing moonshotai/kimi-k3-free',

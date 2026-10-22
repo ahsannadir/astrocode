@@ -1,7 +1,7 @@
 /**
- * Regression tests for the /models picker's key routing (src/tui/modelPicker.ts).
+ * Regression tests for the /model picker's key routing (src/tui/modelPicker.ts).
  *
- * The bug these pin down: /models on a provider with an empty model list — an
+ * The bug these pin down: /model on a provider with an empty model list — an
  * 'OpenAI Compatible' endpoint, whose models are fetched live during /login —
  * opened a picker that ignored Esc. Every keystroke was swallowed, including
  * the one the popup itself advertised ("Esc cancel"), so the only way back to

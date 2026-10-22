@@ -3,7 +3,7 @@
 
 Walks /theme (open, apply), /settings (open, Esc), /login (open, reach the key
 stage, type, Esc back, Esc out) and finishes by checking the prompt still works.
-This is the broad counterpart to the focused /models and /login probes: it is
+This is the broad counterpart to the focused /model and /login probes: it is
 where a change to the shared popup plumbing shows up first.
 
   python3 scripts/probe_modals.py

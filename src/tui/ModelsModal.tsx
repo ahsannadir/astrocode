@@ -20,7 +20,7 @@ interface Props {
 }
 
 /**
- * The /models popup — an opencode-style list of the connected provider's
+ * The /model popup — an opencode-style list of the connected provider's
  * models. ↑/↓ highlight (scrolling through long lists), Enter picks, Esc
  * cancels (always — including when the provider has no models to list, which
  * is the state an 'OpenAI Compatible' endpoint sits in). The active model is

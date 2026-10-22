@@ -1,5 +1,5 @@
 /**
- * Key routing for the /models picker (ModelsModal), split out and pure so the
+ * Key routing for the /model picker (ModelsModal), split out and pure so the
  * one rule that matters can be tested without a terminal:
  *
  *     Esc cancels, ALWAYS.

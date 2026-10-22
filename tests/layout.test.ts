@@ -620,7 +620,7 @@ test('every popup can shrink to a single row without exceeding its budget', () =
   }
 });
 
-test('/models reserves the empty-list notice row', () => {
+test('/model reserves the empty-list notice row', () => {
   // ModelsModal stands a one-row "No models — reconnect with /login" notice
   // in for the entries when the provider's registry list is empty (an 'OpenAI
   // Compatible' endpoint). Reserving chrome alone under-reserved the popup by

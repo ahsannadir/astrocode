@@ -81,7 +81,7 @@ for name, cmdstr, marker in [
     ("settings", "/settings", "⚙ Settings"),
     ("theme", "/theme", "Select a theme"),
     ("login", "/login", "Connect a provider"),
-    ("models", "/models", "Select a model"),
+    ("models", "/model", "Select a model"),
 ]:
     r = run_case(cmdstr, marker)
     print(

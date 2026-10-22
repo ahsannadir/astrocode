@@ -112,7 +112,7 @@ export function App({ config, cwd }: Props) {
   const [contextTokens, setContextTokens] = useState(0);
   const [contextLimit, setContextLimit] = useState(contextLimitFor(config.model));
   const [, setTodoVersion] = useState(0);
-  // ---- interactive popups (/login, /models, /settings, /theme) + copy mode ----
+  // ---- interactive popups (/login, /model, /settings, /theme) + copy mode ----
   const [modal, setModal] = useState<null | 'login' | 'models' | 'settings' | 'theme'>(null);
   // The 'OpenAI Compatible' endpoint saved by an earlier /login, snapshot when
   // the popup opens (not every render — the tick animation re-renders often
@@ -492,7 +492,7 @@ export function App({ config, cwd }: Props) {
           `Model: ${model} — ${
             pid === 'openai-compatible'
               ? 're-run /login to change the endpoint or model.'
-              : 'switch anytime with /models.'
+              : 'switch anytime with /model.'
           }`,
       });
     },
@@ -540,7 +540,7 @@ export function App({ config, cwd }: Props) {
     });
   }, [pushItem, setModel]);
 
-  /** /models completion: switch model now and persist it for next launch. */
+  /** /model completion: switch model now and persist it for next launch. */
   const handleModelSelect = useCallback(
     (m: string) => {
       setModel(m);

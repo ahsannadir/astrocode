@@ -51,11 +51,11 @@ test('filterSlashCommands: whitespace means arguments — menu closes', () => {
 });
 
 test('filterSlashCommands: prefix matches beat substring matches, stable within groups', () => {
-  // A partial name ranks its prefix match first (/models for "model").
-  const model = filterSlashCommands('model').map((c) => c.name);
-  assert.equal(model[0], '/models');
+  // A partial name ranks its prefix match first (/model for "mode").
+  const model = filterSlashCommands('mode').map((c) => c.name);
+  assert.equal(model[0], '/model');
   // For "s": every name that STARTS with s ranks above names that merely
-  // contain it (/cost, /tools, /models, …).
+  // contain it (/cost, /tools, …).
   const s = filterSlashCommands('s').map((c) => c.name);
   const firstContains = s.findIndex((n) => !n.slice(1).toLowerCase().startsWith('s'));
   assert.ok(firstContains > 0, 'there are both prefix and substring matches');
@@ -79,9 +79,9 @@ test('resolveSlashSubmission: partial text runs the highlighted command', () => 
 
 test('resolveSlashSubmission: typed arguments survive completion', () => {
   const matches = filterSlashCommands('mod');
-  const sel = matches.findIndex((c) => c.name === '/models');
+  const sel = matches.findIndex((c) => c.name === '/model');
   assert.ok(sel >= 0);
-  assert.equal(resolveSlashSubmission('/mod gpt-4o', matches, sel), '/models gpt-4o');
+  assert.equal(resolveSlashSubmission('/mod gpt-4o', matches, sel), '/model gpt-4o');
 });
 
 test('resolveSlashSubmission: nothing to run returns null', () => {

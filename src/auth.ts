@@ -1,5 +1,5 @@
 /**
- * Auth/config persistence for the /login + /models flows.
+ * Auth/config persistence for the /login + /model flows.
  *
  * Credentials chosen in the TUI are stored as JSON in ~/.astrocode/config.json
  * (overridable via ASTROCODE_CONFIG_DIR / ASTROCODE_AUTH_FILE) so the app
@@ -14,7 +14,7 @@ export interface AuthConfig {
   /** Provider id — one of the ids in providers.ts ('openai' | 'anthropic' | 'tokenrouter' | 'openrouter' | 'openai-compatible'). */
   provider: string;
   apiKey: string;
-  /** Last model picked via /models (or the provider default). */
+  /** Last model picked via /model (or the provider default). */
   model: string;
   /**
    * Base URL override for the 'openai-compatible' provider (the endpoint the

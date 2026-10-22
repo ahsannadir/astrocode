@@ -36,9 +36,9 @@ conventions, build commands, and anything the agent should always know here.
   module-level `SCENARIOS`/no-arg default so the gate runs all of them, and
   never let a probe apply state to the developer's real config (the harness
   points `ASTROCODE_CONFIG_DIR` at a temp dir).
-- **Popups are always cancellable**: every interactive popup (/login, /models,
+- **Popups are always cancellable**: every interactive popup (/login, /model,
   /settings, /theme) must handle Esc FIRST — before any early return for an
-  empty list, a loading state, or anything else. /models once checked Esc after
+  empty list, a loading state, or anything else. /model once checked Esc after
   bailing out on an empty model list, so an 'OpenAI Compatible' provider (its
   models are fetched live during /login, never stored in the registry) trapped
   the user in a popup that swallowed every keystroke. Key routing that carries

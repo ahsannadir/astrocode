@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Probe: can you always get out of the /models picker?
+"""Probe: can you always get out of the /model picker?
 
-Regression for the trapped picker — /models on a provider whose registry model
+Regression for the trapped picker — /model on a provider whose registry model
 list is empty ('OpenAI Compatible') rendered a popup that swallowed every key,
 Esc included, with no cancel affordance.
 
@@ -50,8 +50,8 @@ def run_scenario(name: str) -> Checks:
     with Session(config=CONFIGS[name]) as s:
         s.pump(2.5)
 
-        s.submit("/models")
-        checks.check("/models picker opens", s.wait_for(TITLE))
+        s.submit("/model")
+        checks.check("/model picker opens", s.wait_for(TITLE))
 
         if name == "compatible":
             checks.check("empty list explains itself", s.wait_for("No models — reconnect with /login"))
@@ -63,7 +63,7 @@ def run_scenario(name: str) -> Checks:
 
         # The picker must also stay closable once keys have been pressed —
         # selection state must never wedge the exit.
-        s.submit("/models")
+        s.submit("/model")
         checks.check("reopened", s.wait_for(TITLE))
         s.key(b"\x1b[B")  # down
         s.key(b"\x1b")  # Esc
