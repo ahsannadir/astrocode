@@ -757,7 +757,7 @@ export function App({ config, cwd }: Props) {
           kind: 'system',
           text:
             "Slash commands can't be queued — this one needs the agent to be idle.\n" +
-            'Info commands (/help, /cost, /status, /context, /mode, …) still run mid-turn.',
+            'Info commands (/help, /cost, /status, /context, /tools, …) still run mid-turn.',
         });
         return;
       }

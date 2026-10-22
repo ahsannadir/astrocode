@@ -89,7 +89,6 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: '/model', description: 'Switch AI model', usage: '/model <name>' },
   { name: '/plan', description: 'Switch to plan mode (read-only analysis)', usage: '/plan' },
   { name: '/act', description: 'Switch to act mode (full access)', usage: '/act' },
-  { name: '/mode', description: 'Show current mode', usage: '/mode' },
   { name: '/clear', description: 'Clear the conversation', usage: '/clear' },
   { name: '/save', description: 'Save this conversation to disk', usage: '/save [name]' },
   { name: '/load', description: 'Resume a saved conversation', usage: '/load <name>' },
@@ -135,7 +134,6 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
 export const SLASH_SAFE_WHILE_BUSY: ReadonlySet<string> = new Set([
   '/help',
   '/cost',
-  '/mode',
   '/status',
   '/tools',
   '/agents',
@@ -204,7 +202,7 @@ Tips
 • Type "/" to open the command menu: ↑/↓ browse every command, Enter runs the
   highlighted one, Tab completes it into the line so you can add arguments.
 • While the agent is working, menu navigation still works and informational
-  commands (/help, /cost, /status, /context, /mode, …) run immediately.
+  commands (/help, /cost, /status, /context, /tools, …) run immediately.
 • Type /login to connect OpenAI, Anthropic, InferX, AgentRouter, ZenMux, TokenRouter, or OpenRouter with an interactive popup.
 • Type /models to pick a model from your connected provider.
 • Type /settings to open the settings menu (mode, verify, auto-commit, turns, budget).
@@ -249,11 +247,6 @@ export async function runSlashCommand(
       ctx.setModel(arg);
       return { handled: true, message: `Model switched to ${arg}` };
     }
-    case '/mode':
-      return {
-        handled: true,
-        message: `Current mode: ${ctx.mode} (${ctx.mode === 'plan' ? 'read-only analysis' : 'full access implementation'})`,
-      };
     case '/plan':
       return {
         handled: true,
