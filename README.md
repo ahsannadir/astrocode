@@ -140,9 +140,9 @@ commands are refused outright unless the model explicitly forces them.
 ### Sessions and context
 
 Conversations save to `~/.astrocode/sessions` with their model and mode, and  
-`/recall` searches them through a BM25-style index. `/compact` folds old tool  
-batches into one-line summaries, auto-compact fires near 85% of the window, and  
-a head-and-tail truncator keeps one huge `read_file` from evicting the  
+`/recall` searches them through a BM25-style index. Auto-compaction folds old  
+tool batches into one-line summaries near 85% of the window, and a  
+head-and-tail truncator keeps one huge `read_file` from evicting the  
 conversation. A repo map — tree, file counts, scripts — builds at startup.
 
 ### Safety and reliability

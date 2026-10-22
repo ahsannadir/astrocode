@@ -50,7 +50,6 @@ import {
   compactConversation,
   describeCompaction,
 } from '../compact.js';
-import type { CompactResult } from '../compact.js';
 import type { ApprovalMode } from '../approval.js';
 import type { AIProvider } from '../types.js';
 import { loadAuth, saveAuth, authFilePath, type AuthConfig } from '../auth.js';
@@ -934,21 +933,6 @@ export function App({ config, cwd }: Props) {
         }
         if (res.swarm) {
           await launchSwarmRef.current?.(res.swarm.goal, res.swarm.noPlan);
-        }
-        if (res.compact) {
-          const before = convRef.current.length;
-          const r: CompactResult = compactConversation(convRef.current);
-          convRef.current = r.messages;
-          const after = convRef.current.length;
-          pushItem({
-            kind: 'system',
-            text: describeCompaction(r) + (before !== after ? ` (${before} → ${after} messages)` : ''),
-          });
-          const afterMessages: ChatMessage[] = [
-            { role: 'system', content: buildSystemPrompt(modeRef.current) },
-            ...convRef.current,
-          ];
-          setContextTokens(estimateContextTokens(afterMessages));
         }
         if (res.message) {
           pushItem({ kind: 'system', text: res.message });

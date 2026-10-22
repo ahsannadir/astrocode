@@ -2,9 +2,8 @@
  * Context compaction for AstroCode.
  *
  * "Context is a finite resource" (Anthropic) and compaction is how a
- * long-running agent sustains progress across it. Previously /compact was a
- * stub that only printed a message; now it performs a real, deterministic
- * compaction of the conversation:
+ * long-running agent sustains progress across it. Compaction is a real,
+ * deterministic pass over the conversation:
  *
  *   1. Always keep the system message, the user's task statements, and the
  *      most recent `keepRecent` messages untouched.
@@ -111,7 +110,7 @@ export function compactConversation(
           ) {
             m.content =
               m.content.slice(0, oldToolResultChars) +
-              `…[elided ${m.content.length - oldToolResultChars} chars by /compact]`;
+              `…[elided ${m.content.length - oldToolResultChars} chars by compaction]`;
             elided++;
           }
         }

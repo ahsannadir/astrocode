@@ -60,8 +60,6 @@ export interface SlashResult {
   settings?: boolean;
   /** If true, open the interactive theme picker popup (from /theme). */
   theme?: boolean;
-  /** If true, compact the conversation now (the app owns the message store). */
-  compact?: boolean;
   /** Launch a swarm run (the app owns the provider + event wiring). */
   swarm?: { goal: string; noPlan: boolean };
 }
@@ -99,11 +97,6 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: '/mcp', description: 'Show MCP servers (Open Tool Bus) & their tools; --connect to (re)connect', usage: '/mcp [--connect]' },
   { name: '/skills', description: 'List skills (progressive-disclosure packages); /skills add <name> scaffolds one', usage: '/skills [add <name>|reload]' },
   { name: '/recall', description: 'Search saved sessions for past work', usage: '/recall <query>' },
-  {
-    name: '/compact',
-    description: 'Summarize context',
-    usage: '/compact',
-  },
   {
     name: '/status',
     description: 'Show environment / connection info',
@@ -389,12 +382,6 @@ export async function runSlashCommand(
         message: `Top ${hits.length} matches for "${arg}":\n${body}\n\nUse /load <name> to open one.`,
       };
     }
-    case '/compact':
-      // The real compaction happens in App.tsx (it owns the conversation);
-      // here we only signal it and short-circuit trivial cases.
-      return ctx.conversationLength <= 4
-        ? { handled: true, message: 'Context is already compact — nothing to summarize.' }
-        : { handled: true, compact: true };
     case '/status':
       return {
         handled: true,
@@ -500,7 +487,7 @@ export async function runSlashCommand(
         message:
           `Context window: ${used.toLocaleString()} / ${limit.toLocaleString()} tokens (${pct.toFixed(1)}%)\n` +
           `${bar(pct)}\n` +
-          `Model: ${ctx.config.model} · ${pct >= 80 ? '⚠ near capacity — consider /compact' : 'ok'}`,
+          `Model: ${ctx.config.model} · ${pct >= 80 ? '⚠ near capacity — auto-compaction approaching' : 'ok'}`,
       };
     }
     case '/swarm': {

@@ -110,13 +110,14 @@ test('/commit: passes a custom message through (not just a boolean flag)', async
   assert.notEqual(noMsg.autocommit, undefined);
 });
 
-test('/act and /clear are no longer commands', async () => {
+test('/act, /clear, and /compact are no longer commands', async () => {
   const names = new Set(SLASH_COMMANDS.map((c) => c.name));
-  assert.equal(names.has('/act'), false);
-  assert.equal(names.has('/clear'), false);
+  for (const removed of ['/act', '/clear', '/compact']) {
+    assert.equal(names.has(removed), false);
+  }
 
   const ctx = makeCtx([]);
-  for (const removed of ['/act', '/clear']) {
+  for (const removed of ['/act', '/clear', '/compact']) {
     const res = await runSlashCommand(removed, ctx);
     assert.equal(res.handled, true, `${removed} is handled as unknown`);
     assert.equal(res.clear, undefined, `${removed} does not clear the conversation`);
