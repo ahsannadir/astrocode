@@ -335,7 +335,7 @@ const definitions: Record<string, ToolDefinition> = {
       if (ctx.mode === 'plan') {
         return {
           ok: false,
-          text: 'Blocked in PLAN mode: swarm workers edit files (in worktrees). Switch to ACT mode (/act) to run a swarm.',
+          text: 'Blocked in PLAN mode: swarm workers edit files (in worktrees). Switch to ACT mode (/settings) to run a swarm.',
         };
       }
       // Worktrees need git — fail with a clean message instead of N worker failures.
@@ -1077,7 +1077,7 @@ export async function executeTool(
     if (ctx.mode === 'plan') {
       return {
         ok: false,
-        text: `Blocked in PLAN mode: "${name}" is an external MCP tool with unknown side effects. Switch to ACT mode (/act) to use it.`,
+        text: `Blocked in PLAN mode: "${name}" is an external MCP tool with unknown side effects. Switch to ACT mode (/settings) to use it.`,
       };
     }
     let a: Record<string, any> = {};

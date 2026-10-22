@@ -290,9 +290,11 @@ def main():
         if "PLAN mode" not in t.screen():
             failures.append(f"/plan did not run on one Enter:\n{t.screen()}")
 
-        # ---- 8. back to act, open /theme modal ----
-        t.send("/act\r", per_char_delay=0.03)
+        # ---- 8. back to act via /settings, open /theme modal ----
+        t.send("/settings\r", per_char_delay=0.03)
         t.drain(0.7)
+        t.key("\r", wait=0.5)  # Interaction mode → act
+        t.key("\x1b", wait=0.5)  # close settings
         t.send("/theme\r", per_char_delay=0.03)
         t.drain(0.9)
         t.shot("10_theme_modal")

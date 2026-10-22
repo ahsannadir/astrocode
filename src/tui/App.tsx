@@ -626,7 +626,7 @@ export function App({ config, cwd }: Props) {
   );
 
   const handleCycleMode = useCallback(() => {
-    // Mode is session state (like /plan & /act) — not persisted.
+    // Mode is session state (like /plan) — not persisted.
     setMode(modeRef.current === 'plan' ? 'act' : 'plan');
   }, [setMode]);
 
@@ -743,7 +743,7 @@ export function App({ config, cwd }: Props) {
         'I can read, write, edit, and explore code, run commands, and map your repo — right from this terminal.\n\n' +
         '- Type **/** to browse commands · **/help** lists everything\n' +
         '- Press **Ctrl+K** to select & copy transcript text\n' +
-        '- Use **/plan** to think it through, **/act** to build',
+        '- Use **/plan** to think it through; **/settings** switches back to act',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -864,8 +864,8 @@ export function App({ config, cwd }: Props) {
           setContextTokens(0);
           clearTodos();
           clearAgentHistory();
-          // The success line comes from res.message below, so /clear and /new
-          // each report exactly once.
+          // The success line comes from res.message below, so /new
+          // reports exactly once.
         }
         if (res.load) {
           const s = res.load;
@@ -1130,7 +1130,7 @@ export function App({ config, cwd }: Props) {
         if (budget > 0 && costRef.current >= budget) {
           pushItem({
             kind: 'error',
-            text: `⛔ Spend budget reached (${formatCost(costRef.current)} ≥ ${formatCost(budget)}).\nRaise ASTROCODE_BUDGET or use /clear to reset.`,
+            text: `⛔ Spend budget reached (${formatCost(costRef.current)} ≥ ${formatCost(budget)}).\nRaise ASTROCODE_BUDGET or use /new to reset.`,
           });
           break;
         }
@@ -1208,7 +1208,7 @@ export function App({ config, cwd }: Props) {
             if (activeMode === 'plan' && !PLAN_ALLOWED_TOOLS.has(call.name)) {
               const blocked = {
                 ok: false,
-                text: `Blocked in PLAN mode: "${call.name}" is not a read-only tool.\nSwitch to ACT mode (/act) to make changes.`,
+                text: `Blocked in PLAN mode: "${call.name}" is not a read-only tool.\nSwitch to ACT mode (/settings) to make changes.`,
               };
               pushItem({ kind: 'tool_result', name: call.name, ok: false, text: blocked.text });
               convRef.current.push({

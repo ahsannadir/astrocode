@@ -86,8 +86,6 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: '/settings', description: 'Open the settings menu', usage: '/settings' },
   { name: '/theme', description: 'Pick a color theme', usage: '/theme' },
   { name: '/plan', description: 'Switch to plan mode (read-only analysis)', usage: '/plan' },
-  { name: '/act', description: 'Switch to act mode (full access)', usage: '/act' },
-  { name: '/clear', description: 'Clear the conversation', usage: '/clear' },
   { name: '/save', description: 'Save this conversation to disk', usage: '/save [name]' },
   { name: '/load', description: 'Resume a saved conversation', usage: '/load <name>' },
   { name: '/sessions', description: 'List saved sessions', usage: '/sessions' },
@@ -242,14 +240,6 @@ export async function runSlashCommand(
         mode: 'plan',
         message: 'Switched to PLAN mode — I will analyze and propose a plan using read-only tools only.',
       };
-    case '/act':
-      return {
-        handled: true,
-        mode: 'act',
-        message: 'Switched to ACT mode — I have full access to edit files and run commands.',
-      };
-    case '/clear':
-      return { handled: true, message: 'Conversation cleared.', clear: true };
     case '/save': {
       const name = arg || ctx.sessionName || 'session';
       if (ctx.messages.length === 0) {

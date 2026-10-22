@@ -127,8 +127,8 @@ view and outside its context.
 
 Two modes decide what the agent may touch. `/plan` is read-only: reads,  
 searches, and proposals, with writes and commands blocked at the tool layer  
-rather than discouraged in the prompt. `/act` restores full access. The status  
-bar always shows which one you're in.
+rather than discouraged in the prompt. The interaction-mode row in `/settings`  
+restores full access. The status bar always shows which one you're in.
 
 Shell commands are guarded the same way. In `dangerous` or `all` approval mode,  
 `run_command` asks before executing: `y` runs once, `a` always allows that  

@@ -93,7 +93,6 @@ test('SLASH_SAFE_WHILE_BUSY: every entry is a real, informational command', () =
   const names = new Set(SLASH_COMMANDS.map((c) => c.name));
   for (const n of SLASH_SAFE_WHILE_BUSY) assert.ok(names.has(n), `${n} is a slash command`);
   assert.ok(SLASH_SAFE_WHILE_BUSY.has('/help'));
-  assert.equal(SLASH_SAFE_WHILE_BUSY.has('/clear'), false);
   assert.equal(SLASH_SAFE_WHILE_BUSY.has('/plan'), false);
 });
 
@@ -109,6 +108,21 @@ test('/commit: passes a custom message through (not just a boolean flag)', async
   // Empty string = "use the generated default message"; must still trigger a commit.
   assert.equal(noMsg.autocommit, '');
   assert.notEqual(noMsg.autocommit, undefined);
+});
+
+test('/act and /clear are no longer commands', async () => {
+  const names = new Set(SLASH_COMMANDS.map((c) => c.name));
+  assert.equal(names.has('/act'), false);
+  assert.equal(names.has('/clear'), false);
+
+  const ctx = makeCtx([]);
+  for (const removed of ['/act', '/clear']) {
+    const res = await runSlashCommand(removed, ctx);
+    assert.equal(res.handled, true, `${removed} is handled as unknown`);
+    assert.equal(res.clear, undefined, `${removed} does not clear the conversation`);
+    assert.equal(res.mode, undefined, `${removed} does not change the mode`);
+    assert.ok(res.message!.includes('Unknown slash command'), `${removed} → unknown command`);
+  }
 });
 
 test('/quit and /copy are no longer commands', async () => {

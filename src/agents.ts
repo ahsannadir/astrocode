@@ -3,7 +3,7 @@
  *
  * Every `spawn_agent` call records a lightweight entry here so the user can
  * inspect what child agents ran this session via the `/agents` slash
- * command. The store is in-memory (per session) and cleared with /clear,
+ * command. The store is in-memory (per session) and cleared with /new,
  * matching the todo list.
  */
 export interface AgentHistoryEntry {

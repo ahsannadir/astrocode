@@ -4,7 +4,7 @@
  * The agent maintains a live checklist via the `todo` tool so multi-step work
  * is visible and structured — inspired by Claude Code's TodoWrite, rendered in
  * a dedicated TUI panel and summarised in the status bar. Todos are in-memory
- * for the process lifetime and reset on /clear or /new.
+ * for the process lifetime and reset on /new.
  */
 export type TodoStatus = 'pending' | 'in_progress' | 'completed';
 
