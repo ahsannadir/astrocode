@@ -70,7 +70,6 @@ export interface SlashContext {
   config: AppConfig;
   conversationLength: number;
   messages: ChatMessage[];
-  setModel: (m: string) => void;
   mode: PlanMode;
   sessionName: string;
   cwd: string;
@@ -86,7 +85,6 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: '/models', description: 'Pick a model from the connected provider', usage: '/models' },
   { name: '/settings', description: 'Open the settings menu', usage: '/settings' },
   { name: '/theme', description: 'Pick a color theme', usage: '/theme' },
-  { name: '/model', description: 'Switch AI model', usage: '/model <name>' },
   { name: '/plan', description: 'Switch to plan mode (read-only analysis)', usage: '/plan' },
   { name: '/act', description: 'Switch to act mode (full access)', usage: '/act' },
   { name: '/clear', description: 'Clear the conversation', usage: '/clear' },
@@ -168,9 +166,10 @@ export function filterSlashCommands(rawNeedle: string): SlashCommandDef[] {
 
 /**
  * Decide what Enter RUNS while the slash menu is open. A command typed in
- * full always wins (so "/model" is never morphed into "/models" just because
- * the latter is highlighted); otherwise the highlighted command runs with any
- * typed arguments preserved. Returns null when there is nothing to run.
+ * full always wins (so a complete command is never morphed into a longer one
+ * it is a prefix of, just because the latter is highlighted); otherwise the
+ * highlighted command runs with any typed arguments preserved. Returns null
+ * when there is nothing to run.
  */
 export function resolveSlashSubmission(
   typed: string,
@@ -237,16 +236,6 @@ export async function runSlashCommand(
       return { handled: true, settings: true };
     case '/theme':
       return { handled: true, theme: true };
-    case '/model': {
-      if (!arg) {
-        return {
-          handled: true,
-          message: `Current model: ${ctx.config.model}\nUsage: /model <name>`,
-        };
-      }
-      ctx.setModel(arg);
-      return { handled: true, message: `Model switched to ${arg}` };
-    }
     case '/plan':
       return {
         handled: true,

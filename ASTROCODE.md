@@ -115,8 +115,8 @@ conventions, build commands, and anything the agent should always know here.
 - Filtering/ranking and Enter resolution are pure helpers in
   `src/commands/slash.ts`: `filterSlashCommands` (exact > prefix > substring,
   whitespace closes the menu) and `resolveSlashSubmission` (a fully typed
-  command always wins over the highlighted one — `/model` must never morph
-  into `/models`).
+  command always wins over the highlighted one — a complete command must
+  never morph into a longer one it is a prefix of).
 - The menu windows over the FULL match list (SlashMenu `maxRows`), so `/` +
   ↑/↓ can reach every command; `slashSel` resets whenever the query changes.
 - Enter RUNS the command, Tab completes it into the line with the caret at the

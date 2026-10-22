@@ -12,13 +12,6 @@ import {
 } from '../src/commands/slash.js';
 import type { SlashContext } from '../src/commands/slash.js';
 
-/** Look up a command definition by name (test helper). */
-function cmd(name: string) {
-  const c = SLASH_COMMANDS.find((x) => x.name === name);
-  assert.ok(c, `${name} exists in SLASH_COMMANDS`);
-  return c!;
-}
-
 function makeCtx(messages: SlashContext['messages']): SlashContext {
   return {
     config: {
@@ -34,7 +27,6 @@ function makeCtx(messages: SlashContext['messages']): SlashContext {
     },
     conversationLength: messages.length,
     messages,
-    setModel: () => {},
     mode: 'act',
     sessionName: 'session',
     cwd: '/tmp',
@@ -58,11 +50,10 @@ test('filterSlashCommands: whitespace means arguments — menu closes', () => {
   assert.deepEqual(filterSlashCommands('load my-session'), []);
 });
 
-test('filterSlashCommands: exact beats prefix beats substring, stable within groups', () => {
-  // "/model" is both a complete command and a prefix of "/models".
+test('filterSlashCommands: prefix matches beat substring matches, stable within groups', () => {
+  // A partial name ranks its prefix match first (/models for "model").
   const model = filterSlashCommands('model').map((c) => c.name);
-  assert.equal(model[0], '/model');
-  assert.ok(model.includes('/models'));
+  assert.equal(model[0], '/models');
   // For "s": every name that STARTS with s ranks above names that merely
   // contain it (/cost, /tools, /models, …).
   const s = filterSlashCommands('s').map((c) => c.name);
@@ -73,10 +64,13 @@ test('filterSlashCommands: exact beats prefix beats substring, stable within gro
 });
 
 test('resolveSlashSubmission: a complete command is never morphed into a longer one', () => {
-  // Simulate the old/hostile order where /models sits above /model.
-  const matches = [cmd('/models'), cmd('/model')];
-  assert.equal(resolveSlashSubmission('/model', matches, 0), '/model');
-  assert.equal(resolveSlashSubmission('/models', matches, 0), '/models');
+  // A synthetic prefix pair, independent of what the registry happens to hold.
+  const matches = [
+    { name: '/run', description: 'probe', usage: '/run' },
+    { name: '/running', description: 'probe', usage: '/running' },
+  ];
+  assert.equal(resolveSlashSubmission('/run', matches, 0), '/run');
+  assert.equal(resolveSlashSubmission('/running', matches, 0), '/running');
 });
 
 test('resolveSlashSubmission: partial text runs the highlighted command', () => {

@@ -837,7 +837,6 @@ export function App({ config, cwd }: Props) {
           config: configRef.current,
           conversationLength: convRef.current.length,
           messages: convRef.current,
-          setModel,
           mode: modeRef.current,
           sessionName,
           cwd,
@@ -971,7 +970,7 @@ export function App({ config, cwd }: Props) {
       convRef.current.push({ role: 'user', content: attached.content });
       await runAgentRef.current?.();
     },
-    [pushItem, setModel, setModal, exit, runAgentRef, sessionName, cwd, contextTokens, setSessionName, enqueuePrompt, openLogin, attachMentionedFiles],
+    [pushItem, setModal, exit, runAgentRef, sessionName, cwd, contextTokens, setSessionName, enqueuePrompt, openLogin, attachMentionedFiles],
   );
 
   /**

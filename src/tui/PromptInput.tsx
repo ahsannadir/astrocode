@@ -65,8 +65,9 @@ interface Props {
  * Slash menu key model — one keypress per intent, no double-Enter dance:
  * - ↑/↓ browse every command (the menu scrolls under the highlight).
  * - Enter RUNS a command: the one typed in full if it is complete, otherwise
- *   the highlighted one. Typing `/model` can never be "completed" into
- *   `/models`, and a partial `/he` runs `/help` immediately.
+ *   the highlighted one. A complete command is never "completed" into a
+ *   longer one it is a prefix of, and a partial `/he` runs `/help`
+ *   immediately.
  * - Tab completes the highlighted name into the line (caret at the end) so
  *   arguments can be typed right away.
  * - Esc closes the menu but KEEPS the line; Esc again (menu closed) clears it.

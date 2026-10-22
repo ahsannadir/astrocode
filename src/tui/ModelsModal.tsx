@@ -110,7 +110,7 @@ export function ModelsModal({ provider, current, maxRows, onSelect, onCancel }: 
         <Text color={theme.muted}>↓ {models.length - start - count} more…</Text>
       )}
       <Text color={theme.muted}>
-        {empty ? 'Esc cancel · /model <name> sets one' : '↑↓ navigate · Enter select · Esc cancel'}
+        {empty ? 'Esc cancel' : '↑↓ navigate · Enter select · Esc cancel'}
       </Text>
     </Box>
   );
