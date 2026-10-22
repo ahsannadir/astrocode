@@ -865,7 +865,8 @@ export function App({ config, cwd }: Props) {
           setContextTokens(0);
           clearTodos();
           clearAgentHistory();
-          pushItem({ kind: 'system', text: 'Conversation cleared.' });
+          // The success line comes from res.message below, so /clear and /new
+          // each report exactly once.
         }
         if (res.load) {
           const s = res.load;
