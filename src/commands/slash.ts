@@ -1,6 +1,6 @@
 import type { AppConfig, ChatMessage, PlanMode } from '../types.js';
 import { executeTool } from '../tools/registry.js';
-import { listSessions } from '../sessions.js';
+import { listSessions, defaultSessionName } from '../sessions.js';
 import { rewindTurn, changesSinceLastBoundary } from '../undo.js';
 import { formatCost, pricingFor, contextLimitFor } from '../cost.js';
 import { loadMemory, getMemoryText, getMemorySources, reloadMemory } from '../memory.js';
@@ -39,6 +39,8 @@ export interface SlashResult {
   settings?: boolean;
   /** If true, open the interactive theme picker popup (from /theme). */
   theme?: boolean;
+  /** If true, open the saved-chats picker popup (from /history). */
+  history?: boolean;
   /** Launch a swarm run (the app owns the provider + event wiring). */
   swarm?: { goal: string; noPlan: boolean };
 }
@@ -63,6 +65,7 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
   { name: '/settings', description: 'Open the settings menu', usage: '/settings' },
   { name: '/theme', description: 'Pick a color theme', usage: '/theme' },
   { name: '/sessions', description: 'List saved sessions', usage: '/sessions' },
+  { name: '/history', description: 'Browse previous chats and resume one', usage: '/history' },
   { name: '/new', description: 'Start a fresh conversation', usage: '/new [name]' },
   { name: '/review', description: 'Show git diff of your changes', usage: '/review' },
   { name: '/cost', description: 'Show token & spend for this session', usage: '/cost' },
@@ -166,6 +169,7 @@ Tips
 • Type /login to connect OpenAI, Anthropic, InferX, AgentRouter, ZenMux, TokenRouter, or OpenRouter with an interactive popup.
 • Type /model to pick a model from your connected provider.
 • Type /settings to open the settings menu (mode, verify, auto-commit, turns, budget).
+• Type /history to reopen a previous chat and continue it from where it stopped.
 • Type /theme to pick a color theme — ↑/↓ previews it live, Enter applies, Esc reverts
   (choice persists across launches; ASTROCODE_THEME env wins).
 • Select & copy: your terminal's native mouse selection works here too (drag + Ctrl+Shift+C / Cmd+C).
@@ -197,6 +201,8 @@ export async function runSlashCommand(
       return { handled: true, settings: true };
     case '/theme':
       return { handled: true, theme: true };
+    case '/history':
+      return { handled: true, history: true };
     case '/sessions': {
       const list = await listSessions();
       if (list.length === 0) {
@@ -214,7 +220,7 @@ export async function runSlashCommand(
       return {
         handled: true,
         clear: true,
-        sessionName: arg || 'session',
+        sessionName: arg || defaultSessionName(),
         message: 'Started a new conversation.',
       };
     case '/review': {

@@ -151,6 +151,24 @@ test('/quit and /copy are no longer commands', async () => {
   }
 });
 
+test('/history asks the app to open the saved-chats picker', async () => {
+  const res = await runSlashCommand('/history', makeCtx([]));
+  assert.equal(res.handled, true);
+  assert.equal(res.history, true);
+  // It only opens a picker — it must not clear or rewind anything by itself.
+  assert.equal(res.clear, undefined);
+  assert.equal(res.rewind, undefined);
+});
+
+test('/new without a name gets a fresh one instead of overwriting "session"', async () => {
+  const res = await runSlashCommand('/new', makeCtx([]));
+  assert.equal(res.clear, true);
+  assert.match(res.sessionName!, /^session-\d{4}-\d{6}$/);
+
+  const named = await runSlashCommand('/new deploy-fix', makeCtx([]));
+  assert.equal(named.sessionName, 'deploy-fix');
+});
+
 test('/exit quits the app', async () => {
   const ctx = makeCtx([]);
   const res = await runSlashCommand('/exit', ctx);

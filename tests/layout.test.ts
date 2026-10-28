@@ -41,7 +41,7 @@ import {
   type PopupKind,
 } from '../src/tui/layout.js';
 
-const POPUPS: (PopupKind | null)[] = [null, 'login', 'models', 'settings', 'theme'];
+const POPUPS: (PopupKind | null)[] = [null, 'login', 'models', 'settings', 'theme', 'history'];
 
 /** Realistic + adversarial list lengths: OpenRouter's catalog is huge. */
 const MODELS_COUNTS = [0, 1, 3, 12, 40, 400];
@@ -87,6 +87,7 @@ test('frame height stays strictly below the terminal row count in every state', 
                     modelsCount,
                     themesCount: THEME_COUNTS[THEME_COUNTS.length - 1],
                     providersCount: PROVIDER_COUNTS[PROVIDER_COUNTS.length - 1],
+                    sessionsCount: 3,
                   };
                   const l = computeLayout(state);
                   checked++;
@@ -113,7 +114,7 @@ test('frame height stays strictly below the terminal row count in every state', 
 test('the sweep really is exhaustive over sizes and popup kinds', () => {
   // Guards the loop above against silently skipping a dimension.
   assert.ok(ROWS.filter((r) => r >= MIN_SUPPORTED_ROWS).length > 90);
-  assert.equal(POPUPS.length, 5);
+  assert.equal(POPUPS.length, 6);
   assert.ok(MODELS_COUNTS.includes(400), 'must cover a very long model list');
 });
 
@@ -131,6 +132,7 @@ test('sub-minimum terminals degrade instead of producing nonsense rows', () => {
         modelsCount: 400,
         themesCount: 12,
         providersCount: 8,
+        sessionsCount: 3,
       });
       // Every reservation must stay finite and non-negative — the layout may
       // overflow a terminal too small to host the chrome, but it must remain
@@ -174,6 +176,7 @@ test('MIN_SUPPORTED_ROWS is the measured threshold, not a guess', () => {
               modelsCount: 400,
               themesCount: 12,
               providersCount: 8,
+              sessionsCount: 3,
             });
             if (!l.fits) allFit = false;
           }
@@ -198,6 +201,7 @@ test('MIN_SUPPORTED_ROWS is the measured threshold, not a guess', () => {
     modelsCount: 400,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   });
   assert.equal(below.fits, false, 'one row below the floor must not claim to fit');
 });
@@ -206,7 +210,7 @@ test('a popup never reserves more than the modal budget', () => {
   // The settings menu used to hardcode its height at 12 rows regardless of the
   // budget, which put frames straight onto the direct-write path.
   for (let rows = MIN_SUPPORTED_ROWS; rows <= 120; rows++) {
-    for (const modal of ['login', 'models', 'settings', 'theme'] as PopupKind[]) {
+    for (const modal of ['login', 'models', 'settings', 'theme', 'history'] as PopupKind[]) {
       const l = computeLayout({
         rows,
         modal,
@@ -218,6 +222,7 @@ test('a popup never reserves more than the modal budget', () => {
         modelsCount: 400,
         themesCount: 12,
         providersCount: 8,
+        sessionsCount: 3,
       });
       // The reservation the frame spends must be exactly the popup's own
       // list + chrome — a second, hand-rolled height formula here is exactly
@@ -229,7 +234,9 @@ test('a popup never reserves more than the modal budget', () => {
             ? l.modelsList
             : modal === 'settings'
               ? l.settingsList
-              : l.themeList;
+              : modal === 'theme'
+                ? l.themeList
+                : l.historyList;
       assert.equal(l.modalH, list.height, `${modal} reservation drifted from its list`);
       assert.ok(l.modalH >= popupMinHeight(modal), `${modal} shrank below its chrome`);
       assert.ok(l.promptH === l.modalH);
@@ -249,6 +256,7 @@ test('settings budget tracks its real row count, windowed like every other popup
     modelsCount: 10,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   });
   // Room to spare → the whole menu, at its true height (chrome + 8 rows).
   assert.equal(l.settingsList.cap, SETTINGS_ROWS);
@@ -267,6 +275,7 @@ test('settings budget tracks its real row count, windowed like every other popup
     modelsCount: 10,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   });
   assert.ok(tight.settingsList.scrolls, 'settings should window when squeezed');
   assert.ok(tight.settingsList.cap < SETTINGS_ROWS);
@@ -283,6 +292,7 @@ test('the task panel yields rows to the active overlay', () => {
     modelsCount: 10,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   };
   const roomy = computeLayout({ ...base, rows: 60, modal: null });
   const squeezed = computeLayout({ ...base, rows: 30, modal: null });
@@ -312,6 +322,7 @@ test('a popup supersedes the slash menu and an approval prompt', () => {
     modelsCount: 10,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   });
   assert.equal(both.slashMenuH, 0);
   assert.equal(both.slashGapH, 0);
@@ -327,6 +338,7 @@ test('a popup supersedes the slash menu and an approval prompt', () => {
     modelsCount: 10,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   });
   assert.equal(approval.slashMenuH, 0);
 });
@@ -343,6 +355,7 @@ test('the banner falls back to the compact header whenever the art does not fit'
     modelsCount: 400,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   });
   assert.equal(compact.bannerH, BANNER_COMPACT_H);
   assert.ok(compact.fits);
@@ -359,6 +372,7 @@ test('the banner falls back to the compact header whenever the art does not fit'
     modelsCount: 10,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   });
   assert.equal(full.bannerH, BANNER_H);
   assert.ok(full.fits);
@@ -382,6 +396,7 @@ test('banner choice is monotonic in terminal height', () => {
       modelsCount: 400,
       themesCount: 12,
       providersCount: 8,
+      sessionsCount: 3,
     });
     assert.ok(l.fits, `rows=${rows} overflowed`);
     assert.ok(l.bannerH >= previous, `banner shrank at rows=${rows}`);
@@ -409,6 +424,7 @@ test('the message pane never drops below its floor', () => {
         modelsCount: 400,
         themesCount: 12,
         providersCount: 8,
+        sessionsCount: 3,
       });
       assert.ok(l.messageHeight >= MIN_MESSAGE_H);
       // MessageArea renders inside the border, so it needs the pane minus 2.
@@ -432,6 +448,7 @@ test('headroom is what keeps us off the direct-write path', () => {
     modelsCount: 10,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   });
   assert.ok(l.totalHeight < 32);
   assert.ok(l.spare >= 1);
@@ -453,6 +470,7 @@ test('totalHeight matches the sum of the rendered blocks', () => {
         modelsCount: 30,
         themesCount: 12,
         providersCount: 8,
+        sessionsCount: 3,
       });
       const sum =
         l.bannerH + // <Box height={bannerH}>
@@ -481,6 +499,7 @@ test('prompt and status bars keep their reserved heights', () => {
     modelsCount: 10,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   });
   assert.equal(l.promptH, PROMPT_H);
   assert.equal(l.approvalH, 0);
@@ -495,6 +514,7 @@ test('prompt and status bars keep their reserved heights', () => {
     modelsCount: 10,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   });
   assert.equal(withApproval.approvalH, APPROVAL_H);
 });
@@ -590,7 +610,7 @@ test('todoPanelHeight matches what TodoPanel renders', () => {
 
 test('every popup can shrink to a single row without exceeding its budget', () => {
   for (let rows = MIN_SUPPORTED_ROWS; rows <= 80; rows++) {
-    for (const modal of ['login', 'models', 'settings', 'theme'] as PopupKind[]) {
+    for (const modal of ['login', 'models', 'settings', 'theme', 'history'] as PopupKind[]) {
       const l = computeLayout({
         rows,
         modal,
@@ -602,6 +622,7 @@ test('every popup can shrink to a single row without exceeding its budget', () =
         modelsCount: 400,
         themesCount: 12,
         providersCount: 8,
+        sessionsCount: 3,
       });
       const list =
         modal === 'login'
@@ -610,7 +631,9 @@ test('every popup can shrink to a single row without exceeding its budget', () =
             ? l.modelsList
             : modal === 'settings'
               ? l.settingsList
-              : l.themeList;
+              : modal === 'theme'
+                ? l.themeList
+                : l.historyList;
       assert.ok(list.cap >= 1, `${modal} has no room for a row at rows=${rows}`);
       assert.ok(
         list.height <= l.modalBudget || list.height <= popupMinHeight(modal),
@@ -637,6 +660,7 @@ test('/model reserves the empty-list notice row', () => {
       modelsCount: 0,
       themesCount: 12,
       providersCount: 8,
+      sessionsCount: 3,
     });
     assert.equal(l.modelsList.height, POPUP_CHROME_H.models + 1, `rows=${rows}`);
     assert.equal(l.modelsList.cap, 1, `rows=${rows}`);
@@ -644,6 +668,63 @@ test('/model reserves the empty-list notice row', () => {
     assert.ok(l.modalH >= popupMinHeight('models'), `rows=${rows}`);
     assert.ok(l.fits, `rows=${rows} overflowed`);
   }
+});
+
+test('/history reserves its list rows, and a notice row when there are none', () => {
+  // The picker is only opened when at least one session exists, but the
+  // reservation must still hold the empty state (same contract as /model), or
+  // a cleared sessions directory would under-reserve the popup by a row.
+  const empty = computeLayout({
+    rows: 40,
+    modal: 'history',
+    slashActive: false,
+    slashMatches: 0,
+    todoCount: 0,
+    approvalPending: false,
+    queueLength: 0,
+    modelsCount: 10,
+    themesCount: 12,
+    providersCount: 8,
+    sessionsCount: 0,
+  });
+  assert.equal(empty.historyList.cap, 1);
+  assert.equal(empty.historyList.height, POPUP_CHROME_H.history + 1);
+  assert.equal(empty.modalH, empty.historyList.height);
+
+  const many = computeLayout({
+    rows: 60,
+    modal: 'history',
+    slashActive: false,
+    slashMatches: 0,
+    todoCount: 0,
+    approvalPending: false,
+    queueLength: 0,
+    modelsCount: 10,
+    themesCount: 12,
+    providersCount: 8,
+    sessionsCount: 40,
+  });
+  assert.equal(many.historyList.cap, 40);
+  assert.equal(many.modalH, 40 + POPUP_CHROME_H.history);
+  assert.ok(many.fits);
+
+  // On a cramped terminal it windows instead of overflowing.
+  const tight = computeLayout({
+    rows: MIN_SUPPORTED_ROWS,
+    modal: 'history',
+    slashActive: false,
+    slashMatches: 0,
+    todoCount: 0,
+    approvalPending: true,
+    queueLength: 1,
+    modelsCount: 10,
+    themesCount: 12,
+    providersCount: 8,
+    sessionsCount: 40,
+  });
+  assert.ok(tight.historyList.scrolls);
+  assert.ok(tight.historyList.height <= tight.modalBudget);
+  assert.ok(tight.fits);
 });
 
 test('the layout is pure — same input, same output', () => {
@@ -658,6 +739,7 @@ test('the layout is pure — same input, same output', () => {
     modelsCount: 137,
     themesCount: 12,
     providersCount: 8,
+    sessionsCount: 3,
   };
   assert.deepEqual(computeLayout(state), computeLayout(state));
   assert.deepEqual(computeLayout({ ...state }), computeLayout(state));

@@ -30,6 +30,22 @@ export interface SessionData {
   messages: ChatMessage[];
 }
 
+/**
+ * A distinct default name for a fresh conversation.
+ *
+ * Sessions are written after every turn, so two launches must not share the
+ * name `session` — the second would overwrite the first chat. Seconds are
+ * included so two terminals opened in the same minute still get their own
+ * file. Kept short-ish for the status bar, which sheds it first when narrow.
+ */
+export function defaultSessionName(now: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return (
+    `session-${p(now.getMonth() + 1)}${p(now.getDate())}-` +
+    `${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`
+  );
+}
+
 export function sessionDir(): string {
   return process.env.ASTROCODE_SESSION_DIR ||
     path.join(os.homedir(), '.astrocode', 'sessions');

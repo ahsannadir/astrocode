@@ -141,8 +141,9 @@ commands are refused outright unless the model explicitly forces them.
 
 ### Sessions and context
 
-Saved sessions live in `~/.astrocode/sessions` with their model and mode, and  
-`/sessions` lists them. Auto-compaction folds old 
+Every chat is saved to `~/.astrocode/sessions` after each turn, with its model  
+and mode. `/sessions` lists them and `/history` opens a picker that loads one  
+back into the transcript — same session, same model, ready to continue. Auto-compaction folds old 
 tool batches into one-line summaries near 85% of the window, and a  
 head-and-tail truncator keeps one huge `read_file` from evicting the  
 conversation. A repo map — tree, file counts, scripts — builds at startup.

@@ -18,6 +18,8 @@ import { LoginModal, type LoginMeta } from './LoginModal.js';
 import { ModelsModal } from './ModelsModal.js';
 import { SettingsMenu } from './SettingsMenu.js';
 import { ThemeModal } from './ThemeModal.js';
+import { HistoryModal } from './HistoryModal.js';
+import { itemsFromMessages } from './history.js';
 import { ApprovalPrompt } from './ApprovalPrompt.js';
 import { ApprovalGate, normalizeApprovalMode, parseApproveEnv } from '../approval.js';
 import type { ApprovalDecision } from '../approval.js';
@@ -56,6 +58,13 @@ import { copyToClipboard } from '../clipboard.js';
 import { providerById, PROVIDERS } from '../providers.js';
 import { connectAllMcp, disconnectAllMcp, mcpServerNames } from '../mcp.js';
 import { loadSkills, skillsPromptBlock } from '../skills.js';
+import {
+  listSessions,
+  loadSession,
+  saveSession,
+  defaultSessionName,
+} from '../sessions.js';
+import type { SessionMeta } from '../sessions.js';
 import type { SwarmEvent } from '../swarm.js';
 
 interface Props {
@@ -93,7 +102,9 @@ export function App({ config, cwd }: Props) {
   const [tick, setTick] = useState(0);
   const [tokenCount, setTokenCount] = useState(0);
   const [mode, setModeState] = useState<PlanMode>('act');
-  const [sessionName, setSessionName] = useState('session');
+  const [sessionName, setSessionName] = useState(() => defaultSessionName());
+  // Saved conversations offered by /history (loaded on demand, never at boot).
+  const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [costUsd, setCostUsd] = useState(0);
   const [gitBranch, setGitBranch] = useState('');
   const [slashSel, setSlashSel] = useState(0);
@@ -110,7 +121,7 @@ export function App({ config, cwd }: Props) {
   const [contextLimit, setContextLimit] = useState(contextLimitFor(config.model));
   const [, setTodoVersion] = useState(0);
   // ---- interactive popups (/login, /model, /settings, /theme) + copy mode ----
-  const [modal, setModal] = useState<null | 'login' | 'models' | 'settings' | 'theme'>(null);
+  const [modal, setModal] = useState<null | 'login' | 'models' | 'settings' | 'theme' | 'history'>(null);
   // The 'OpenAI Compatible' endpoint saved by an earlier /login, snapshot when
   // the popup opens (not every render — the tick animation re-renders often
   // and loadAuth() hits the disk). It is what /login offers to reuse instead
@@ -203,6 +214,7 @@ export function App({ config, cwd }: Props) {
     modelsCount: provider.models.length,
     themesCount: THEME_NAMES.length,
     providersCount: PROVIDERS.length,
+    sessionsCount: sessions.length,
   });
   const {
     bannerH,
@@ -213,6 +225,7 @@ export function App({ config, cwd }: Props) {
     themeList,
     settingsList,
     loginList,
+    historyList,
   } = layout;
   // Draw a completion menu only when the budget reserved rows for it, so the
   // rendered tree and the reservation can never disagree. A popup replaces
@@ -294,6 +307,28 @@ export function App({ config, cwd }: Props) {
     };
   }, []);
   const repoMapRef = useRef('');
+  // Birthday of the active chat, preserved across resumes and /new so a saved
+  // session keeps its original createdAt instead of looking freshly created.
+  const sessionCreatedRef = useRef(new Date().toISOString());
+
+  /**
+   * Write the live conversation to ~/.astrocode/sessions. Called at the start
+   * and end of every turn, so /history can list the chat even if the process
+   * is killed mid-turn, and a resumed chat keeps appending to the same file.
+   * Best-effort: a read-only home directory must never break a turn.
+   */
+  const persistSession = useCallback(async () => {
+    if (convRef.current.length === 0) return;
+    await saveSession(sessionName, {
+      cwd,
+      model: configRef.current.model,
+      mode: modeRef.current,
+      createdAt: sessionCreatedRef.current,
+      messages: convRef.current,
+    }).catch(() => {
+      /* unwritable session dir: the chat still works, it just won't persist */
+    });
+  }, [cwd, sessionName]);
 
   // Load the git branch once for the status bar.
   useEffect(() => {
@@ -709,6 +744,74 @@ export function App({ config, cwd }: Props) {
     return parts.join('');
   }, []);
 
+  /**
+   * /history: snapshot the saved chats, then open the picker. Loaded before
+   * the modal mounts so the layout can reserve the right number of rows in the
+   * same frame (a list that grows after the popup paints would outgrow its
+   * budget — the Ink direct-write freeze).
+   */
+  const openHistory = useCallback(async () => {
+    const list = await listSessions();
+    if (list.length === 0) {
+      pushItem({
+        kind: 'system',
+        text: 'No saved chats yet — sessions are written to ~/.astrocode/sessions after each turn.',
+      });
+      return;
+    }
+    setSessions(list);
+    setModal('history');
+  }, [pushItem]);
+
+  /**
+   * Resume a saved chat: replace the live conversation AND the transcript, then
+   * carry on in the same session file. The conversation is what the model
+   * continues from; the transcript is rebuilt so the user sees what they are
+   * continuing (tool calls included). Cost/token counters restart at zero
+   * because a session file stores no per-process accounting.
+   */
+  const handleHistorySelect = useCallback(
+    async (name: string) => {
+      const saved = await loadSession(name);
+      if (!saved) {
+        setModal(null);
+        pushItem({
+          kind: 'error',
+          text: `Could not open "${name}" — the session file is missing or unreadable.`,
+        });
+        return;
+      }
+      const messages = Array.isArray(saved.messages) ? saved.messages : [];
+      const resumedMode: PlanMode = saved.mode === 'plan' ? 'plan' : 'act';
+      convRef.current = messages;
+      itemsRef.current = itemsFromMessages(messages);
+      sessionCreatedRef.current = saved.createdAt || new Date().toISOString();
+      setSessionName(saved.name);
+      setModal(null);
+      costRef.current = 0;
+      tokensRef.current = 0;
+      setCostUsd(0);
+      setTokenCount(0);
+      setMode(resumedMode);
+      if (saved.model) {
+        setModel(saved.model);
+        setContextLimit(contextLimitFor(saved.model));
+      }
+      pushItem({
+        kind: 'system',
+        text:
+          `↩ Resumed "${saved.name}" — ${messages.length} message(s) · ` +
+          `${saved.model || 'unknown model'} · ${resumedMode}. Keep typing to continue.`,
+      });
+      const resumedContext: ChatMessage[] = [
+        { role: 'system', content: buildSystemPrompt(resumedMode) },
+        ...messages,
+      ];
+      setContextTokens(estimateContextTokens(resumedContext));
+    },
+    [buildSystemPrompt, pushItem, setMode, setModel],
+  );
+
   // ---- animation loop for stars/spinner ----
   // Only repaint while something is actually moving (busy spinner, live
   // activity cards, banner twinkle). When idle the screen stays perfectly
@@ -858,6 +961,7 @@ export function App({ config, cwd }: Props) {
           setContextTokens(0);
           clearTodos();
           clearAgentHistory();
+          sessionCreatedRef.current = new Date().toISOString();
           // The success line comes from res.message below, so /new
           // reports exactly once.
         }
@@ -882,6 +986,9 @@ export function App({ config, cwd }: Props) {
         if (res.theme) {
           setModal('theme');
         }
+        if (res.history) {
+          await openHistory();
+        }
         if (res.swarm) {
           await launchSwarmRef.current?.(res.swarm.goal, res.swarm.noPlan);
         }
@@ -905,7 +1012,7 @@ export function App({ config, cwd }: Props) {
       convRef.current.push({ role: 'user', content: attached.content });
       await runAgentRef.current?.();
     },
-    [pushItem, setModal, exit, runAgentRef, sessionName, cwd, contextTokens, setSessionName, enqueuePrompt, openLogin, attachMentionedFiles],
+    [pushItem, setModal, exit, runAgentRef, sessionName, cwd, contextTokens, setSessionName, enqueuePrompt, openLogin, attachMentionedFiles, openHistory],
   );
 
   /**
@@ -1021,6 +1128,10 @@ export function App({ config, cwd }: Props) {
     // Checkpoint: mark a turn boundary so /rewind can restore the whole
     // working tree from before this turn.
     markTurnBoundary();
+
+    // Persist before the first request: the chat is now listable in /history
+    // even if this turn is interrupted or the process dies.
+    await persistSession();
 
     // Build messages with a mode-aware system prompt (includes memory, repo
     // map, and the current task list). Re-assigned per loop iteration below
@@ -1256,6 +1367,7 @@ export function App({ config, cwd }: Props) {
         });
       }
       // Refresh context estimate (turn added tokens) and the todo panel.
+      await persistSession();
       const afterMessages: ChatMessage[] = [
         { role: 'system', content: buildSystemPrompt(activeMode) },
         ...convRef.current,
@@ -1282,7 +1394,7 @@ export function App({ config, cwd }: Props) {
         void runAgentRef.current?.();
       }
     }
-  }, [cwd, pushItem, bump, buildSystemPrompt, setModel, attachMentionedFiles]);
+  }, [cwd, pushItem, bump, buildSystemPrompt, setModel, attachMentionedFiles, persistSession]);
   runAgentRef.current = runAgent;
 
 
@@ -1410,6 +1522,14 @@ export function App({ config, cwd }: Props) {
               maxRows={themeList.cap}
               onPreview={handleThemePreview}
               onSelect={handleThemeSelect}
+              onCancel={() => setModal(null)}
+            />
+          ) : modal === 'history' ? (
+            <HistoryModal
+              sessions={sessions}
+              current={sessionName}
+              maxRows={historyList.cap}
+              onSelect={handleHistorySelect}
               onCancel={() => setModal(null)}
             />
           ) : (

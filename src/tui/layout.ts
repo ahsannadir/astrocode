@@ -45,6 +45,7 @@ export const SETTINGS_CHROME_H = 4;
 export const SETTINGS_ROWS = 8;
 export const MODELS_CHROME_H = 4; // models: title + hint + borders
 export const THEME_CHROME_H = 5; // theme: title + subtitle + hint + borders
+export const HISTORY_CHROME_H = 4; // history: title + hint + borders
 // login: title + subtitle + hint + borders, plus the two scroll notices its
 // model stage can add once a fetched list outgrows the screen (the list length
 // isn't known up front, so both are always reserved).
@@ -55,7 +56,7 @@ export const SCROLL_NOTICE_H = 2; // "↑ n more…" + "↓ n more…" rows on a
 export const TODO_MAX_ROWS = 6;
 
 /** The interactive popups that replace the prompt box. */
-export type PopupKind = 'login' | 'models' | 'settings' | 'theme';
+export type PopupKind = 'login' | 'models' | 'settings' | 'theme' | 'history';
 
 /** Non-list chrome (borders + title/subtitle/hint rows) per popup. */
 export const POPUP_CHROME_H: Record<PopupKind, number> = {
@@ -63,6 +64,7 @@ export const POPUP_CHROME_H: Record<PopupKind, number> = {
   models: MODELS_CHROME_H,
   settings: SETTINGS_CHROME_H,
   theme: THEME_CHROME_H,
+  history: HISTORY_CHROME_H,
 };
 
 /**
@@ -104,6 +106,8 @@ export interface LayoutInput {
   themesCount: number;
   /** Providers available (/login). */
   providersCount: number;
+  /** Saved sessions offered by (/history). */
+  sessionsCount: number;
 }
 
 /**
@@ -200,6 +204,7 @@ export interface Layout {
   themeList: PopupList;
   settingsList: PopupList;
   loginList: PopupList;
+  historyList: PopupList;
   /**
    * Rows the render tree actually occupies. Asserting `totalHeight < rows` is
    * the whole point of this module — it is what keeps Ink off its direct-write
@@ -358,6 +363,9 @@ function buildLayout(input: LayoutInput, bannerH: number): Layout {
   // which means it sizes itself through the very same helper as the others
   // (an earlier hand-rolled copy could disagree with `modalH`).
   const loginList = popupList(input.providersCount, LOGIN_CHROME_H);
+  // /history never collapses to zero list rows either: an empty directory
+  // renders a one-row "no saved chats" notice, same contract as /model.
+  const historyList = popupList(Math.max(1, input.sessionsCount), HISTORY_CHROME_H);
   const modalH =
     input.modal === 'login'
       ? loginList.height
@@ -367,7 +375,9 @@ function buildLayout(input: LayoutInput, bannerH: number): Layout {
           ? settingsList.height
           : input.modal === 'theme'
             ? themeList.height
-            : 0;
+            : input.modal === 'history'
+              ? historyList.height
+              : 0;
   const promptH = input.modal !== null ? modalH : PROMPT_H;
 
   const messageHeight = Math.max(
@@ -417,6 +427,7 @@ function buildLayout(input: LayoutInput, bannerH: number): Layout {
     themeList,
     settingsList,
     loginList,
+    historyList,
     totalHeight,
     spare: rows - totalHeight,
     fits: totalHeight < rows,

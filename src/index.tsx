@@ -48,7 +48,7 @@ EXAMPLES
 SLASH COMMANDS
   /help /login /model /settings /theme /sessions
   /new /rewind /review /cost /agents /swarm /mcp
-  /skills /context /memory /map /todo
+  /skills /context /memory /map /todo /history
   /status /stars /whoami /exit`;
 
 function printBanner() {

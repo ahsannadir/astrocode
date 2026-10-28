@@ -40,6 +40,7 @@ ASSERTION_PROBES = [
     "probe_login_reuse.py",  # /login: reuse a saved custom endpoint
     "probe_mentions.py",  # @file picker: open, Tab, Esc, email boundary, attach
     "probe_mode_tab.py",  # Tab switches plan/act; menus keep Tab for completion
+    "probe_history.py",  # /history: open, Esc, empty state, resume + persistence
 ]
 
 # Scripts that print facts for a human instead of asserting — they cannot
